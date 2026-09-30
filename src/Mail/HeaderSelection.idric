@@ -189,12 +189,15 @@ finish_current (Just value) accumulated = value :: accumulated
 
 parse_searchable_headers_from :
     List MailSourceOctet →
+    List MailSourceOctet →
     Maybe SearchableHeaderValue →
     List SearchableHeaderValue →
     List SearchableHeaderValue
-parse_searchable_headers_from [] current accumulated =
+parse_searchable_headers_from [] octets current accumulated =
     reverse (finish_current current accumulated)
-parse_searchable_headers_from octets current accumulated =
+parse_searchable_headers_from (_ :: fuel) [] current accumulated =
+    reverse (finish_current current accumulated)
+parse_searchable_headers_from (_ :: fuel) octets current accumulated =
     case read_physical_line octets of
         Line [] rest =>
             reverse (finish_current current accumulated)
@@ -204,11 +207,13 @@ parse_searchable_headers_from octets current accumulated =
                    case current of
                        Nothing =>
                            parse_searchable_headers_from
+                               fuel
                                rest
                                Nothing
                                accumulated
                        Just (SearchableValue header value) =>
                            parse_searchable_headers_from
+                               fuel
                                rest
                                (Just
                                    (SearchableValue
@@ -221,6 +226,7 @@ parse_searchable_headers_from octets current accumulated =
                    in case split_header_field line of
                           NotAField =>
                               parse_searchable_headers_from
+                                  fuel
                                   rest
                                   Nothing
                                   completed
@@ -228,11 +234,13 @@ parse_searchable_headers_from octets current accumulated =
                               case header_from_name name of
                                   Nothing =>
                                       parse_searchable_headers_from
+                                          fuel
                                           rest
                                           Nothing
                                           completed
                                   Just header =>
                                       parse_searchable_headers_from
+                                          fuel
                                           rest
                                           (Just (SearchableValue header value))
                                           completed
@@ -242,7 +250,7 @@ parse_searchable_headers :
     List MailSourceOctet →
     List SearchableHeaderValue
 parse_searchable_headers octets =
-    parse_searchable_headers_from octets Nothing []
+    parse_searchable_headers_from octets octets Nothing []
 
 starts_with_needle :
     List MailSourceOctet →
