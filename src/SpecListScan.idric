@@ -3,6 +3,8 @@ module Main
 import Data.Buffer
 import System
 import System.File
+import System.Info
+import Mail.Source
 import Mail.MboxSelection
 import Mail.SpecList
 
