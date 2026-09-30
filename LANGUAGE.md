@@ -18,21 +18,22 @@ Implemented:
 - ASCII-case-insensitive header lookup;
 - 4 MiB fail-closed header-size guard;
 - regular-expression matching restricted to explicitly named headers;
-- exact SHA-256 deduplication of RFC message bytes, excluding the mbox `From `
-  separator;
+- multiplicity-aware retry accounting using SHA-256 of exact whole mbox entry
+  bytes; equal entries remain distinct occurrences;
 - dry-run by default; `--move` is required for mutation;
 - source then archive locking with advisory file locks plus dotlocks;
 - adjacent rewrite preflight and source-size + 64 MiB free-space gate;
 - archive-first append, flush and fsync before any source removal;
 - parent-directory fsync when a new archive or replacement source entry is
   created;
+- fail-closed append if an existing archive does not end on a line boundary;
 - atomic source replacement after writing and fsyncing the complete unmatched
   mailbox;
 - source mode preservation and fail-closed owner/group verification before
   replacement;
 - tests for streaming/buffer framing equivalence, folded/repeated header
   selection, body-only false positives, the 4 MiB guard, reused Message-ID
-  values, and exclusion of the mbox separator from the digest.
+  values, and duplicate-entry multiplicity.
 
 SPEC-LIST policy remains outside the generic filer.  The wrapper searches only
 `From`, `Sender`, `Reply-To`, `To`, `Cc`, and `Subject` for
