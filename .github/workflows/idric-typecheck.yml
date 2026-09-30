@@ -90,9 +90,9 @@ jobs:
         run: |
           python3 mbox/test/generate_idric_fixture_conformance.py > mbox/src/MboxFixtureRuntime.idric
           (
-            cd mbox
-            ../idric/_/build/exec/idris2 -i src src/MboxFixtureRuntime.idric -o idric-fixtures
-            ./build/exec/idric-fixtures | tee idric-fixtures.out
+            cd mbox/src
+            ../../idric/_/build/exec/idris2 MboxFixtureRuntime.idric -o idric-fixtures
+            ./build/exec/idric-fixtures | tee ../idric-fixtures.out
           )
           grep -Fx 'PASS Idriç shared framing fixtures' mbox/idric-fixtures.out
 
