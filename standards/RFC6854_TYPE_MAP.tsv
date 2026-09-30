@@ -1,0 +1,5 @@
+# RFC 6854 updated production	Idriç type
+from	FromField / FromValue
+sender	SenderField / SenderValue
+resent-from	ResentFromField / FromValue
+resent-sender	ResentSenderField / SenderValue
