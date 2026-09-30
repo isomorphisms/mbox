@@ -18,8 +18,8 @@ Implemented:
 - ASCII-case-insensitive header lookup;
 - 4 MiB fail-closed header-size guard;
 - regular-expression matching restricted to explicitly named headers;
-- multiplicity-aware retry accounting using SHA-256 of exact whole mbox entry
-  bytes; equal entries remain distinct occurrences;
+- one-for-one copying of selected mbox entries; no Message-ID/hash deduplication,
+  so equal source entries remain equal archive occurrences;
 - dry-run by default; `--move` is required for mutation;
 - source then archive locking with advisory file locks plus dotlocks;
 - adjacent rewrite preflight and source-size + 64 MiB free-space gate;
@@ -45,7 +45,11 @@ Not implemented in this branch:
 
 - MIME body parsing or RFC 2047 decoding for filing policy;
 - group/comment/obsolete address grammar beyond the v0 address helpers;
-- stale-dotlock recovery.
+- stale-dotlock recovery;
+- an exactly-once crash/retry transaction journal. If a process dies after the
+  archive fsync but before source replacement, rerunning can append duplicates;
+  the current design prefers possible duplication over silently discarding a
+  source occurrence.
 
 ## Build gate
 
