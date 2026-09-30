@@ -1,0 +1,5 @@
+# source	production	expected
+Undisclosed recipients:;	group	Group(display-name, typed colon, no members, typed semicolon)
+Team:alice@example.org,bob@example.org;	group	Group(mailbox-list with 2 members)
+Team: ;	group	Group(CFWS-only group-list)
+"Managing Partners":ben@example.org,carol@example.org;	group	quoted display-name plus mailbox-list

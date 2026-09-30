@@ -523,13 +523,31 @@ data Mailbox
     | BareMailbox AddrSpec
 
 public export
+record MailboxListSeparator where
+    constructor SeparatesMailboxes
+    source : SourceSlice
+
+public export
+record MailboxListPart where
+    constructor LaterMailbox
+    separator : MailboxListSeparator
+    mailbox : Mailbox
+
+public export
+record CurrentMailboxList where
+    constructor MailboxListStructure
+    source : SourceSlice
+    first_mailbox : Mailbox
+    later_mailboxes : List MailboxListPart
+
+public export
 record ObsoleteMailboxList where
     constructor HistoricalMailboxList
     source : SourceSlice
 
 public export
 data MailboxList
-    = CurrentMailboxList SourceSlice (OneOrMore Mailbox)
+    = CurrentMailboxListSyntax CurrentMailboxList
     | ObsoleteMailboxListSyntax ObsoleteMailboxList
 
 public export
@@ -549,11 +567,23 @@ data GroupList
     | ObsoleteGroupListSyntax ObsoleteGroupList
 
 public export
+record GroupNameSeparator where
+    constructor SeparatesGroupName
+    source : SourceSlice
+
+public export
+record GroupTerminator where
+    constructor TerminatesGroup
+    source : SourceSlice
+
+public export
 record Group where
     constructor AddressGroup
     source : SourceSlice
     display_name : DisplayName
+    name_separator : GroupNameSeparator
     members : Maybe GroupList
+    terminator : GroupTerminator
     after : Maybe CommentsAndFoldingWhiteSpace
 
 public export
@@ -562,8 +592,26 @@ data Address
     | AddressGroupValue Group
 
 public export
+record AddressListSeparator where
+    constructor SeparatesAddresses
+    source : SourceSlice
+
+public export
+record AddressListPart where
+    constructor LaterAddress
+    separator : AddressListSeparator
+    address : Address
+
+public export
+record CurrentAddressList where
+    constructor AddressListStructure
+    source : SourceSlice
+    first_address : Address
+    later_addresses : List AddressListPart
+
+public export
 data AddressList
-    = CurrentAddressList SourceSlice (OneOrMore Address)
+    = CurrentAddressListSyntax CurrentAddressList
     | ObsoleteAddressListSyntax ObsoleteAddressList
 
 -- 3.5 message and body

@@ -1,0 +1,4 @@
+# source	production	expected
+alice@example.org,bob@example.net	mailbox-list	2 mailboxes + typed comma
+"Example, Person" <person@example.org>, SPEC-LIST <spec-list@example.org>	mailbox-list	quoted comma remains inside first mailbox; one list separator
+alice@example.org,	mailbox-list	valid one-mailbox prefix; trailing comma remains for enclosing grammar to reject

@@ -71,6 +71,12 @@ line_feed_octet = source_octet 10
 colon_octet : MailSourceOctet
 colon_octet = source_octet 58
 
+comma_octet : MailSourceOctet
+comma_octet = source_octet 44
+
+semicolon_octet : MailSourceOctet
+semicolon_octet = source_octet 59
+
 full_stop_octet : MailSourceOctet
 full_stop_octet = source_octet 46
 
@@ -1544,3 +1550,235 @@ read_current_mailbox cursor =
                         ParsedValue
                             (BareMailbox address_spec)
                             after
+
+
+read_mailbox_list_separator : LexerCursor → Maybe (Parsed MailboxListSeparator)
+read_mailbox_list_separator
+    (AtMailSource source begins (octet :: rest)) =
+        if same_source_octet octet comma_octet
+           then
+               let ends = advance_offset begins
+               in Just $
+                    ParsedValue
+                        (SeparatesMailboxes
+                            (slice_between source begins ends))
+                        (AtMailSource source ends rest)
+           else Nothing
+read_mailbox_list_separator _ = Nothing
+
+record MailboxListTailScan where
+    constructor ScannedMailboxListTail
+    parts : List MailboxListPart
+    after : LexerCursor
+
+scan_current_mailbox_list_tail :
+    List MailSourceOctet →
+    LexerCursor →
+    List MailboxListPart →
+    MailboxListTailScan
+scan_current_mailbox_list_tail [] cursor accumulated =
+    ScannedMailboxListTail (reverse accumulated) cursor
+scan_current_mailbox_list_tail (_ :: fuel) cursor accumulated =
+    case read_mailbox_list_separator cursor of
+        Nothing =>
+            ScannedMailboxListTail (reverse accumulated) cursor
+        Just (ParsedValue separator after_separator) =>
+            case read_current_mailbox after_separator of
+                Nothing =>
+                    ScannedMailboxListTail (reverse accumulated) cursor
+                Just (ParsedValue mailbox after_mailbox) =>
+                    scan_current_mailbox_list_tail
+                        fuel
+                        after_mailbox
+                        (LaterMailbox separator mailbox :: accumulated)
+
+read_current_mailbox_list : LexerCursor → Maybe (Parsed MailboxList)
+read_current_mailbox_list
+    cursor@(AtMailSource source begins octets) =
+        case read_current_mailbox cursor of
+            Nothing => Nothing
+            Just (ParsedValue first_mailbox after_first) =>
+                case scan_current_mailbox_list_tail
+                         octets
+                         after_first
+                         [] of
+                    ScannedMailboxListTail later after =>
+                        let structure =
+                                MailboxListStructure
+                                    (slice_between
+                                        source
+                                        begins
+                                        (next_octet after))
+                                    first_mailbox
+                                    later
+                        in Just $
+                            ParsedValue
+                                (CurrentMailboxListSyntax structure)
+                                after
+
+read_group_name_separator : LexerCursor → Maybe (Parsed GroupNameSeparator)
+read_group_name_separator
+    (AtMailSource source begins (octet :: rest)) =
+        if same_source_octet octet colon_octet
+           then
+               let ends = advance_offset begins
+               in Just $
+                    ParsedValue
+                        (SeparatesGroupName
+                            (slice_between source begins ends))
+                        (AtMailSource source ends rest)
+           else Nothing
+read_group_name_separator _ = Nothing
+
+read_group_terminator : LexerCursor → Maybe (Parsed GroupTerminator)
+read_group_terminator
+    (AtMailSource source begins (octet :: rest)) =
+        if same_source_octet octet semicolon_octet
+           then
+               let ends = advance_offset begins
+               in Just $
+                    ParsedValue
+                        (TerminatesGroup
+                            (slice_between source begins ends))
+                        (AtMailSource source ends rest)
+           else Nothing
+read_group_terminator _ = Nothing
+
+read_current_group_list : LexerCursor → Maybe (Parsed GroupList)
+read_current_group_list cursor =
+    case read_current_mailbox_list cursor of
+        Just (ParsedValue mailboxes after) =>
+            Just $
+                ParsedValue
+                    (GroupMailboxes mailboxes)
+                    after
+        Nothing =>
+            case read_current_cfws cursor of
+                Nothing => Nothing
+                Just (ParsedValue cfws after) =>
+                    Just $
+                        ParsedValue
+                            (GroupComments cfws)
+                            after
+
+read_current_group : LexerCursor → Maybe (Parsed Group)
+read_current_group
+    cursor@(AtMailSource source begins octets) =
+        case read_current_display_name cursor of
+            Nothing => Nothing
+            Just (ParsedValue display_name after_name) =>
+                case read_group_name_separator after_name of
+                    Nothing => Nothing
+                    Just (ParsedValue separator after_separator) =>
+                        let group_list_result =
+                                read_current_group_list after_separator
+                            members =
+                                case group_list_result of
+                                    Nothing => Nothing
+                                    Just (ParsedValue group_list after_members) =>
+                                        Just group_list
+                            before_terminator =
+                                case group_list_result of
+                                    Nothing => after_separator
+                                    Just (ParsedValue group_list after_members) =>
+                                        after_members
+                        in case read_group_terminator before_terminator of
+                               Nothing => Nothing
+                               Just (ParsedValue terminator after_terminator) =>
+                                   let (after_cfws, after) =
+                                           read_optional_current_cfws
+                                               after_terminator
+                                   in Just $
+                                       ParsedValue
+                                           (AddressGroup
+                                               (slice_between
+                                                   source
+                                                   begins
+                                                   (next_octet after))
+                                               display_name
+                                               separator
+                                               members
+                                               terminator
+                                               after_cfws)
+                                           after
+
+read_current_address : LexerCursor → Maybe (Parsed Address)
+read_current_address cursor =
+    case read_current_group cursor of
+        Just (ParsedValue group after) =>
+            Just $
+                ParsedValue
+                    (AddressGroupValue group)
+                    after
+        Nothing =>
+            case read_current_mailbox cursor of
+                Nothing => Nothing
+                Just (ParsedValue mailbox after) =>
+                    Just $
+                        ParsedValue
+                            (AddressMailbox mailbox)
+                            after
+
+read_address_list_separator : LexerCursor → Maybe (Parsed AddressListSeparator)
+read_address_list_separator
+    (AtMailSource source begins (octet :: rest)) =
+        if same_source_octet octet comma_octet
+           then
+               let ends = advance_offset begins
+               in Just $
+                    ParsedValue
+                        (SeparatesAddresses
+                            (slice_between source begins ends))
+                        (AtMailSource source ends rest)
+           else Nothing
+read_address_list_separator _ = Nothing
+
+record AddressListTailScan where
+    constructor ScannedAddressListTail
+    parts : List AddressListPart
+    after : LexerCursor
+
+scan_current_address_list_tail :
+    List MailSourceOctet →
+    LexerCursor →
+    List AddressListPart →
+    AddressListTailScan
+scan_current_address_list_tail [] cursor accumulated =
+    ScannedAddressListTail (reverse accumulated) cursor
+scan_current_address_list_tail (_ :: fuel) cursor accumulated =
+    case read_address_list_separator cursor of
+        Nothing =>
+            ScannedAddressListTail (reverse accumulated) cursor
+        Just (ParsedValue separator after_separator) =>
+            case read_current_address after_separator of
+                Nothing =>
+                    ScannedAddressListTail (reverse accumulated) cursor
+                Just (ParsedValue address after_address) =>
+                    scan_current_address_list_tail
+                        fuel
+                        after_address
+                        (LaterAddress separator address :: accumulated)
+
+read_current_address_list : LexerCursor → Maybe (Parsed AddressList)
+read_current_address_list
+    cursor@(AtMailSource source begins octets) =
+        case read_current_address cursor of
+            Nothing => Nothing
+            Just (ParsedValue first_address after_first) =>
+                case scan_current_address_list_tail
+                         octets
+                         after_first
+                         [] of
+                    ScannedAddressListTail later after =>
+                        let structure =
+                                AddressListStructure
+                                    (slice_between
+                                        source
+                                        begins
+                                        (next_octet after))
+                                    first_address
+                                    later
+                        in Just $
+                            ParsedValue
+                                (CurrentAddressListSyntax structure)
+                                after

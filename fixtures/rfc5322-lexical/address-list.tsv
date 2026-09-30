@@ -1,0 +1,4 @@
+# source	production	expected
+alice@example.org,bob@example.org	address-list	2 mailbox addresses
+Team:alice@example.org,bob@example.org;,carol@example.org	address-list	group then mailbox
+"Example, Person" <person@example.org>, SPEC-LIST <spec-list@example.org>	address-list	quoted display-name comma does not split list
