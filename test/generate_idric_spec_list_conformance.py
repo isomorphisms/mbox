@@ -102,12 +102,34 @@ print("""module SpecListFixtureRuntime
 
 import Data.Bits
 import Mail.HeaderSelection
+import Mail.MboxSelection
 import Mail.SpecList
 import System
 
 """)
 
-checks = []
+whole_mailbox = fixture_path.read_bytes()
+expected_ordinals = [
+    index
+    for index, (_, _, expected) in enumerate(entries)
+    if expected
+]
+
+print("whole_mailbox : List Bits8")
+print(f"whole_mailbox = {bits(whole_mailbox)}")
+print()
+print("integrated_ok : Bool")
+print("integrated_ok =")
+print("    case scan_selection_codes spec_list_policy 4194304 whole_mailbox of")
+print("        Left error => False")
+print(
+    "        Right selected => "
+    f"selected_ordinals selected == {expected_ordinals}"
+)
+print()
+
+checks = ["integrated_ok"]
+
 
 for index, (identity, headers, expected) in enumerate(entries):
     name = f"message_{index}"
