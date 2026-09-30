@@ -1,0 +1,64 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$repo_root"
+
+rfc=standards/rfc/rfc5322.txt
+map=standards/RFC5322_TYPE_MAP.tsv
+source=src/Mail/Rfc5322.idric
+
+temporary=$(mktemp -d)
+trap 'rm -rf "$temporary"' EXIT HUP INT TERM
+
+actual="$temporary/rfc-productions"
+mapped="$temporary/mapped-productions"
+
+awk '
+    $0 == "3.2.  Lexical Tokens" { inside = 1 }
+    $0 == "5.  Security Considerations" { inside = 0 }
+    inside {
+        line = $0
+        sub(/^   /, "", line)
+        if (line ~ /^[A-Za-z][A-Za-z0-9-]*[[:space:]]*=/) {
+            sub(/[[:space:]]*=.*/, "", line)
+            print line
+        }
+    }
+' "$rfc" | sort -u > "$actual"
+
+awk -F '\t' '
+    $0 !~ /^#/ && NF >= 2 {
+        print $1
+    }
+' "$map" | sort > "$mapped"
+
+duplicates=$(awk -F '\t' '$0 !~ /^#/ && NF >= 2 { print $1 }' "$map" |
+    sort | uniq -d)
+if [ -n "$duplicates" ]; then
+    printf '%s\n' 'duplicate RFC 5322 production mappings:' >&2
+    printf '%s\n' "$duplicates" >&2
+    exit 1
+fi
+
+if ! cmp -s "$actual" "$mapped"; then
+    printf '%s\n' 'RFC 5322 production/type map is incomplete or stale:' >&2
+    diff -u "$actual" "$mapped" >&2 || true
+    exit 1
+fi
+
+while IFS="$(printf '\t')" read -r production type
+do
+    case "$production" in
+        ''|'#'*) continue ;;
+    esac
+
+    if ! grep -Eq "(record|data)[[:space:]]+$type([[:space:]]|$)" "$source"; then
+        printf 'mapped production %s names missing Idriç type %s\n' \
+            "$production" "$type" >&2
+        exit 1
+    fi
+done < "$map"
+
+count=$(wc -l < "$actual" | tr -d ' ')
+printf 'RFC 5322 semantic type map: PASS (%s productions)\n' "$count"
