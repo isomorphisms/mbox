@@ -1,0 +1,179 @@
+module Mail.Rfc5322.Lexer
+
+import Data.List
+import Mail.Source
+import Mail.Rfc5234
+import Mail.Rfc5322
+
+-- A parser cursor belongs to one immutable source snapshot.  The remaining
+-- octets are still undecided source material; successful recognizers refine
+-- them into RFC-named values carrying exact SourceSlice provenance.
+public export
+record LexerCursor where
+    constructor AtMailSource
+    snapshot : SourceIdentity
+    next_octet : OctetOffset
+    remaining : List MailSourceOctet
+
+public export
+record Parsed a where
+    constructor ParsedValue
+    value : a
+    after : LexerCursor
+
+record WhiteSpaceScan where
+    constructor ScannedWhiteSpace
+    values : List WhiteSpace
+    after : LexerCursor
+
+space_octet : MailSourceOctet
+space_octet = source_octet 32
+
+horizontal_tab_octet : MailSourceOctet
+horizontal_tab_octet = source_octet 9
+
+carriage_return_octet : MailSourceOctet
+carriage_return_octet = source_octet 13
+
+line_feed_octet : MailSourceOctet
+line_feed_octet = source_octet 10
+
+advance_offset : OctetOffset → OctetOffset
+advance_offset (AtOctet n) = AtOctet (n + 1)
+
+slice_between : SourceIdentity → OctetOffset → OctetOffset → SourceSlice
+slice_between source begins ends =
+    Slice source (Octets begins ends)
+
+single_octet_slice : SourceIdentity → OctetOffset → SourceSlice
+single_octet_slice source begins =
+    slice_between source begins (advance_offset begins)
+
+white_space_at : SourceIdentity → OctetOffset → MailSourceOctet → Maybe WhiteSpace
+white_space_at source offset octet =
+    if same_source_octet octet space_octet
+       then Just (Space (single_octet_slice source offset))
+       else if same_source_octet octet horizontal_tab_octet
+               then Just (HorizontalTab (single_octet_slice source offset))
+               else Nothing
+
+scan_white_space_from : SourceIdentity → OctetOffset → List MailSourceOctet → List WhiteSpace → WhiteSpaceScan
+scan_white_space_from source offset [] accumulated =
+    ScannedWhiteSpace
+        (reverse accumulated)
+        (AtMailSource source offset [])
+scan_white_space_from source offset all_octets@(octet :: rest) accumulated =
+    case white_space_at source offset octet of
+        Nothing =>
+            ScannedWhiteSpace
+                (reverse accumulated)
+                (AtMailSource source offset all_octets)
+        Just white_space =>
+            scan_white_space_from
+                source
+                (advance_offset offset)
+                rest
+                (white_space :: accumulated)
+
+scan_white_space : LexerCursor → WhiteSpaceScan
+scan_white_space (AtMailSource source offset octets) =
+    scan_white_space_from source offset octets []
+
+as_one_or_more : List a → Maybe (OneOrMore a)
+as_one_or_more [] = Nothing
+as_one_or_more (first :: rest) = Just (OneThen first rest)
+
+read_crlf : LexerCursor → Maybe (Parsed CRLF)
+read_crlf
+    (AtMailSource source begins
+        (carriage_return :: line_feed :: rest)) =
+            if same_source_octet carriage_return carriage_return_octet
+               && same_source_octet line_feed line_feed_octet
+               then
+                   let middle = advance_offset begins
+                       ends = advance_offset middle
+                       carriage_return_slice =
+                           slice_between source begins middle
+                       line_feed_slice =
+                           slice_between source middle ends
+                       whole = slice_between source begins ends
+                   in Just $
+                        ParsedValue
+                            (InternetLineEnding
+                                whole
+                                (CR carriage_return_slice)
+                                (LF line_feed_slice))
+                            (AtMailSource source ends rest)
+               else Nothing
+read_crlf _ = Nothing
+
+read_white_space : LexerCursor → Maybe (Parsed WhiteSpace)
+read_white_space (AtMailSource source begins (octet :: rest)) =
+    case white_space_at source begins octet of
+        Nothing => Nothing
+        Just value =>
+            Just $
+                ParsedValue
+                    value
+                    (AtMailSource source (advance_offset begins) rest)
+read_white_space _ = Nothing
+
+read_white_space_run : LexerCursor → Maybe (Parsed (OneOrMore WhiteSpace))
+read_white_space_run cursor =
+    case scan_white_space cursor of
+        ScannedWhiteSpace values after =>
+            case as_one_or_more values of
+                Nothing => Nothing
+                Just run => Just (ParsedValue run after)
+
+-- RFC 5322 section 3.2.2:
+--
+--   FWS = ([*WSP CRLF] 1*WSP) / obs-FWS
+--
+-- This recognizer handles only the current production.  Obsolete FWS is a
+-- separate parser because accepting it must remain visible in the result type.
+read_current_folding_white_space : LexerCursor → Maybe (Parsed FoldingWhiteSpace)
+read_current_folding_white_space cursor@(AtMailSource source begins octets) =
+    case scan_white_space cursor of
+        ScannedWhiteSpace leading after_leading =>
+            case read_crlf after_leading of
+                Just (ParsedValue line_ending after_line_ending) =>
+                    case read_white_space_run after_line_ending of
+                        Just (ParsedValue trailing after_trailing) =>
+                            Just $
+                                ParsedValue
+                                    (CurrentFWS $
+                                        FoldedFWS
+                                            (slice_between
+                                                source
+                                                begins
+                                                (next_octet after_trailing))
+                                            leading
+                                            line_ending
+                                            trailing)
+                                    after_trailing
+                        Nothing =>
+                            single_line_fws source begins leading after_leading
+                Nothing =>
+                    single_line_fws source begins leading after_leading
+  where
+    single_line_fws :
+        SourceIdentity →
+        OctetOffset →
+        List WhiteSpace →
+        LexerCursor →
+        Maybe (Parsed FoldingWhiteSpace)
+    single_line_fws source begins values after =
+        case as_one_or_more values of
+            Nothing => Nothing
+            Just run =>
+                Just $
+                    ParsedValue
+                        (CurrentFWS $
+                            SingleLineFWS
+                                (slice_between
+                                    source
+                                    begins
+                                    (next_octet after))
+                                run)
+                        after
