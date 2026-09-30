@@ -1,0 +1,6 @@
+module MboxFramerTypecheck
+
+import Mail.Mbox
+
+main : IO ()
+main = pure ()
