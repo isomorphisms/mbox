@@ -1,0 +1,25 @@
+name: Agda
+
+on:
+  push:
+    branches:
+      - Agda
+  pull_request:
+    paths:
+      - "src/**/*.agda"
+      - ".github/workflows/agda.yml"
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Agda
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y agda agda-stdlib
+      - name: Typecheck
+        run: |
+          STDLIB_FILE="$(dpkg -L agda-stdlib | grep '/Data/List.agda$' | head -n 1)"
+          STDLIB="$(dirname "$(dirname "$STDLIB_FILE")")"
+          agda -i src -i "$STDLIB" src/Mbox.agda
