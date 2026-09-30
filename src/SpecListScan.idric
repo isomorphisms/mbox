@@ -1,0 +1,129 @@
+module Main
+
+import Data.Buffer
+import System
+import System.File
+import Mail.MboxSelection
+import Mail.SpecList
+
+chunk_size : Int
+chunk_size = 65536
+
+maximum_header_octets : Nat
+maximum_header_octets = 4194304
+
+scan_buffer :
+    Buffer →
+    Nat →
+    Int →
+    SelectionScanner →
+    IO (Either SelectionScanError SelectionScanner)
+scan_buffer buffer Z offset scanner =
+    pure (Right scanner)
+scan_buffer buffer (S remaining) offset scanner = do
+    code <- getBits8 buffer offset
+    case feed_selection_code spec_list_policy scanner code of
+        Left error =>
+            pure (Left error)
+        Right next =>
+            scan_buffer
+                buffer
+                remaining
+                (offset + 1)
+                next
+
+covering
+scan_file :
+    File →
+    Buffer →
+    SelectionScanner →
+    IO (Either String SelectionScanner)
+scan_file file buffer scanner = do
+    result <- readBufferData file buffer 0 chunk_size
+    case result of
+        Left error =>
+            pure (Left "mailbox read failed")
+        Right 0 =>
+            pure (Right scanner)
+        Right read_count =>
+            case !(scan_buffer
+                       buffer
+                       (cast read_count)
+                       0
+                       scanner) of
+                Left error =>
+                    pure (Left "header section exceeded the configured limit")
+                Right next =>
+                    scan_file file buffer next
+
+show_occurrence : SelectedOccurrence → String
+show_occurrence
+    (SelectedOccurrenceAt
+        ordinal
+        (Octets
+            (AtOctet begins)
+            (AtOctet ends))) =
+                show ordinal
+                ++ "\t"
+                ++ show begins
+                ++ "\t"
+                ++ show ends
+
+print_occurrences : List SelectedOccurrence → IO ()
+print_occurrences [] = pure ()
+print_occurrences (occurrence :: rest) = do
+    putStrLn (show_occurrence occurrence)
+    print_occurrences rest
+
+covering
+scan_path : String → IO ()
+scan_path source = do
+    opened <- openFile source Read
+    case opened of
+        Left error => do
+            putStrLn ("cannot open source mailbox: " ++ source)
+            exitFailure
+        Right file => do
+            allocated <- newBuffer chunk_size
+            case allocated of
+                Nothing => do
+                    closeFile file
+                    putStrLn "cannot allocate scan buffer"
+                    exitFailure
+                Just buffer => do
+                    scanned <-
+                        scan_file
+                            file
+                            buffer
+                            (start_selection_scan maximum_header_octets)
+                    closeFile file
+                    case scanned of
+                        Left message => do
+                            putStrLn message
+                            exitFailure
+                        Right scanner => do
+                            let selected =
+                                    finish_selection_scan
+                                        spec_list_policy
+                                        scanner
+                            putStrLn
+                                ("selected\t" ++ show (length selected))
+                            putStrLn "ordinal\tstart\tend"
+                            print_occurrences selected
+
+usage : String → IO ()
+usage program = do
+    putStrLn ("usage: " ++ program ++ " SOURCE_MBOX")
+    exitFailure
+
+covering
+main : IO ()
+main = do
+    arguments <- getArgs
+    case arguments of
+        [program, source] =>
+            scan_path source
+        program :: _ =>
+            usage program
+        [] =>
+            usage "spec-list-scan"
