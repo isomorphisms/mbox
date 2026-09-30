@@ -115,11 +115,22 @@ record AtextRun where
     characters : OneOrMore Atext
 
 public export
+record DotAtomSeparator where
+    constructor DotBetweenAtextRuns
+    source : SourceSlice
+
+public export
+record DotAtomPart where
+    constructor DottedAtextPart
+    separator : DotAtomSeparator
+    text : AtextRun
+
+public export
 record DotAtomText where
     constructor DottedAtext
     source : SourceSlice
     first_part : AtextRun
-    later_parts : List AtextRun
+    later_parts : List DotAtomPart
 
 public export
 record DotAtom where

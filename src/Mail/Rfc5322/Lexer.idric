@@ -460,25 +460,36 @@ read_atext_run cursor@(AtMailSource source begins octets) =
 
 record DotAtomTailScan where
     constructor ScannedDotAtomTail
-    parts : List AtextRun
+    parts : List DotAtomPart
     after : LexerCursor
 
-scan_dot_atom_tail : LexerCursor → List AtextRun → DotAtomTailScan
-scan_dot_atom_tail cursor@(AtMailSource source offset octets) accumulated =
+-- The first argument is termination fuel only.  Each accepted ".atext" tail
+-- consumes at least one source octet, while the structurally smaller fuel list
+-- gives the totality checker independent evidence that recursion terminates.
+scan_dot_atom_tail : List MailSourceOctet → LexerCursor → List DotAtomPart → DotAtomTailScan
+scan_dot_atom_tail [] cursor accumulated =
+    ScannedDotAtomTail (reverse accumulated) cursor
+scan_dot_atom_tail (_ :: fuel) cursor@(AtMailSource source offset octets) accumulated =
     case octets of
         [] => ScannedDotAtomTail (reverse accumulated) cursor
         octet :: rest =>
             if same_source_octet octet full_stop_octet
                then
-                   let after_dot =
+                   let separator_source =
+                           single_octet_slice source offset
+                       after_dot =
                            AtMailSource source (advance_offset offset) rest
                    in case read_atext_run after_dot of
                           Nothing =>
                               ScannedDotAtomTail (reverse accumulated) cursor
                           Just (ParsedValue part after_part) =>
                               scan_dot_atom_tail
+                                  fuel
                                   after_part
-                                  (part :: accumulated)
+                                  (DottedAtextPart
+                                      (DotBetweenAtextRuns separator_source)
+                                      part
+                                   :: accumulated)
                else ScannedDotAtomTail (reverse accumulated) cursor
 
 read_dot_atom_text : LexerCursor → Maybe (Parsed DotAtomText)
@@ -486,7 +497,7 @@ read_dot_atom_text cursor@(AtMailSource source begins octets) =
     case read_atext_run cursor of
         Nothing => Nothing
         Just (ParsedValue first_part after_first) =>
-            case scan_dot_atom_tail after_first [] of
+            case scan_dot_atom_tail octets after_first [] of
                 ScannedDotAtomTail later_parts after =>
                     Just $
                         ParsedValue
