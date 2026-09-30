@@ -1,0 +1,20 @@
+From addr1@example.org Tue Sep 29 04:00:00 2026
+From: sender@example.org
+To: bare@example.org
+To: Display Name <display@example.net>
+Cc: "Doe, Jane" <jane@example.com>, John <john@EXAMPLE.COM>
+Message-ID: <addresses-one@example.org>
+Subject: address forms
+
+body
+From addr2@example.org Tue Sep 29 04:01:00 2026
+From: sender@example.org
+To: first@example.org,
+ second@example.org,
+ "Comma, Name" <third@example.org>
+Cc: fourth@example.org
+Cc: Fifth Person <fifth@example.org>
+Message-ID: <addresses-two@example.org>
+Subject: repeated and folded addresses
+
+body
