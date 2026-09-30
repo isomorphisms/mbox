@@ -1,0 +1,12 @@
+# hex octets	production	expected result	expected remaining	note
+61 40 62	dot-atom addr-spec	AddrSpec(a AddressAtSign b)	-	minimal dot-atom address
+61 6c 69 63 65 40 65 78 61 6d 70 6c 65 2e 6f 72 67	dot-atom addr-spec	AddrSpec(alice AddressAtSign example.org)	-	ordinary address
+73 70 65 63 2d 6c 69 73 74 40 65 78 61 6d 70 6c 65 2e 6f 72 67	dot-atom addr-spec	AddrSpec(spec-list AddressAtSign example.org)	-	atext punctuation in local-part
+61 2e 62 40 63 2e 64	dot-atom addr-spec	AddrSpec(a.b AddressAtSign c.d)	-	dots remain explicit DotAtomSeparator values
+2e 61 40 62	dot-atom addr-spec	NO_MATCH	2e 61 40 62	local-part cannot begin with dot
+61 2e 40 62	dot-atom addr-spec	NO_MATCH	61 2e 40 62	local-part cannot end with dot before at-sign
+61 40 2e 62	dot-atom addr-spec	NO_MATCH	61 40 2e 62	domain cannot begin with dot
+61 40 62 2e	dot-atom addr-spec	AddrSpec(a AddressAtSign b)	2e	prefix parser leaves following dot to enclosing grammar
+22 78 22 40 65 78 61 6d 70 6c 65 2e 6f 72 67	dot-atom addr-spec	NO_MATCH_SUBSET	22 78 22 40 65 78 61 6d 70 6c 65 2e 6f 72 67	quoted-string local-part is valid RFC 5322 but is a separate alternative
+75 73 65 72 40 5b 31 32 37 2e 30 2e 30 2e 31 5d	dot-atom addr-spec	NO_MATCH_SUBSET	75 73 65 72 40 5b 31 32 37 2e 30 2e 30 2e 31 5d	domain-literal is valid RFC 5322 but is a separate alternative
+c3 a9 40 65 78 61 6d 70 6c 65 2e 6f 72 67	dot-atom addr-spec	NO_MATCH_RFC5322	c3 a9 40 65 78 61 6d 70 6c 65 2e 6f 72 67	UTF-8 atext is an RFC 6532 extension

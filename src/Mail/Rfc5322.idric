@@ -411,10 +411,16 @@ data Domain
     | ObsoleteDomainSyntax ObsoleteDomain
 
 public export
+record AddrSpecSeparator where
+    constructor AddressAtSign
+    source : SourceSlice
+
+public export
 record AddrSpec where
     constructor InternetAddressSpecification
     source : SourceSlice
     local_part : LocalPart
+    separator : AddrSpecSeparator
     domain : Domain
 
 public export

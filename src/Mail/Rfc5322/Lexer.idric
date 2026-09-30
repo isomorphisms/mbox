@@ -74,6 +74,9 @@ colon_octet = source_octet 58
 full_stop_octet : MailSourceOctet
 full_stop_octet = source_octet 46
 
+at_sign_octet : MailSourceOctet
+at_sign_octet = source_octet 64
+
 exclamation_mark_octet : MailSourceOctet
 exclamation_mark_octet = source_octet 33
 
@@ -509,3 +512,79 @@ read_dot_atom_text cursor@(AtMailSource source begins octets) =
                                 first_part
                                 later_parts)
                             after
+
+
+public export
+record BareDotAtomAddress where
+    constructor DotAtomAddress
+    source : SourceSlice
+    address : AddrSpec
+
+read_dot_atom_without_cfws : LexerCursor → Maybe (Parsed DotAtom)
+read_dot_atom_without_cfws cursor@(AtMailSource source begins octets) =
+    case read_dot_atom_text cursor of
+        Nothing => Nothing
+        Just (ParsedValue text after) =>
+            Just $
+                ParsedValue
+                    (DottedAtom
+                        (slice_between
+                            source
+                            begins
+                            (next_octet after))
+                        Nothing
+                        text
+                        Nothing)
+                    after
+
+read_addr_spec_separator : LexerCursor → Maybe (Parsed AddrSpecSeparator)
+read_addr_spec_separator
+    (AtMailSource source begins (octet :: rest)) =
+        if same_source_octet octet at_sign_octet
+           then
+               let ends = advance_offset begins
+               in Just $
+                    ParsedValue
+                        (AddressAtSign
+                            (slice_between source begins ends))
+                        (AtMailSource source ends rest)
+           else Nothing
+read_addr_spec_separator _ = Nothing
+
+-- First executable slice of RFC 5322 section 3.4.1:
+--
+--   addr-spec = local-part "@" domain
+--
+-- This recognizer implements the current dot-atom alternative on both sides.
+-- Quoted-string local-parts, domain-literals, and obsolete syntax stay as
+-- separate grammar branches rather than being approximated here.
+read_dot_atom_addr_spec : LexerCursor → Maybe (Parsed BareDotAtomAddress)
+read_dot_atom_addr_spec cursor@(AtMailSource source begins octets) =
+    case read_dot_atom_without_cfws cursor of
+        Nothing => Nothing
+        Just (ParsedValue local_dot_atom after_local) =>
+            case read_addr_spec_separator after_local of
+                Nothing => Nothing
+                Just (ParsedValue separator after_separator) =>
+                    case read_dot_atom_without_cfws after_separator of
+                        Nothing => Nothing
+                        Just (ParsedValue domain_dot_atom after_domain) =>
+                            let local_part =
+                                    DotAtomLocalPart local_dot_atom
+                                domain =
+                                    DotAtomDomain domain_dot_atom
+                                whole =
+                                    slice_between
+                                        source
+                                        begins
+                                        (next_octet after_domain)
+                                address =
+                                    InternetAddressSpecification
+                                        whole
+                                        local_part
+                                        separator
+                                        domain
+                            in Just $
+                                ParsedValue
+                                    (DotAtomAddress whole address)
+                                    after_domain
