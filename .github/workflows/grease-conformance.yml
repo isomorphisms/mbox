@@ -1,0 +1,54 @@
+name: Grease conformance
+
+on:
+  push:
+    branches:
+      - Grease
+    paths:
+      - "source/**"
+      - "test/**"
+      - "fixtures/**"
+      - "tests/**"
+      - ".github/workflows/grease-conformance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  conformance:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Verify shared fixture bytes first
+        run: sh tests/shared-fixtures.sh
+
+      - name: Build pinned YSH test runtime
+        shell: bash
+        run: |
+          set -euxo pipefail
+          url=https://oils.pub/download/oils-for-unix-0.37.0.tar.gz
+          archive="$RUNNER_TEMP/oils-for-unix-0.37.0.tar.gz"
+          curl --fail --location --proto '=https' --tlsv1.2 "$url" -o "$archive"
+          echo 'f4d41d20a0523dbcfbd4ba231f82edf25b08d4965d65bc71fcb56666d6743000  '"$archive" | sha256sum -c -
+          tar -xzf "$archive" -C "$RUNNER_TEMP"
+          cd "$RUNNER_TEMP/oils-for-unix-0.37.0"
+          ./configure --without-readline
+          _build/oils.sh
+          test -x _bin/cxx-opt-sh/ysh
+
+      - name: Run Grease against shared conformance cases
+        shell: bash
+        run: |
+          set -euxo pipefail
+          ysh="$RUNNER_TEMP/oils-for-unix-0.37.0/_bin/cxx-opt-sh/ysh"
+          {
+            printf '%s\t%s\t%s\n' fixture.checksums PASS 'shared fixture checksum gate'
+            "$ysh" test/conformance.grease
+          } > tests/conformance/receipt.tsv
+          cat tests/conformance/receipt.tsv
+          sh tests/conformance/check-receipt.sh tests/conformance/cases.tsv tests/conformance/receipt.tsv
