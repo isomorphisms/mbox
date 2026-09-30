@@ -480,6 +480,123 @@ bool addrSpecMatchesDomainFold(scope const(char)[] a, scope const(char)[] b)
     return asciiEqualInsensitive(a[aa + 1 .. $], b[bb + 1 .. $]);
 }
 
+
+enum FrameEventKind {
+    envelopeBegins,
+    messageEnds,
+}
+
+struct FrameEvent {
+    FrameEventKind kind;
+    ByteOffset offset;
+}
+
+struct MboxFramer {
+    ByteOffset absoluteOffset;
+    bool atLineStart = true;
+    size_t candidateLength;
+    bool hasOpenEntry;
+    ByteOffset openEntryStart;
+}
+
+struct FramerFeed {
+    MboxFramer state;
+    FrameEvent[] events;
+}
+
+MboxFramer initialMboxFramer() pure nothrow @safe
+{
+    return MboxFramer.init;
+}
+
+FramerFeed feedMboxFramer(
+    MboxFramer state,
+    scope const(char)[] chunk
+) @safe
+{
+    enum prefix = "From ";
+    FrameEvent[] events;
+
+    foreach (c; chunk) {
+        const nextOffset = state.absoluteOffset + 1;
+
+        if (state.candidateLength != 0) {
+            if (c != prefix[state.candidateLength]) {
+                state.absoluteOffset = nextOffset;
+                state.atLineStart = c == '\n';
+                state.candidateLength = 0;
+                continue;
+            }
+
+            ++state.candidateLength;
+            state.absoluteOffset = nextOffset;
+
+            if (state.candidateLength == prefix.length) {
+                const separatorStart = state.absoluteOffset - prefix.length;
+                if (state.hasOpenEntry)
+                    events ~= FrameEvent(
+                        FrameEventKind.messageEnds,
+                        separatorStart
+                    );
+                events ~= FrameEvent(
+                    FrameEventKind.envelopeBegins,
+                    separatorStart
+                );
+                state.candidateLength = 0;
+                state.atLineStart = false;
+                state.hasOpenEntry = true;
+                state.openEntryStart = separatorStart;
+            }
+            continue;
+        }
+
+        if (state.atLineStart && c == 'F') {
+            state.absoluteOffset = nextOffset;
+            state.candidateLength = 1;
+            // The line start remains undecided until the candidate either
+            // becomes "From " or mismatches.
+            state.atLineStart = true;
+            continue;
+        }
+
+        state.absoluteOffset = nextOffset;
+        state.atLineStart = c == '\n';
+    }
+
+    return FramerFeed(state, events);
+}
+
+FrameEvent[] finishMboxFramer(MboxFramer state) @safe
+{
+    if (!state.hasOpenEntry)
+        return [];
+    return [
+        FrameEvent(
+            FrameEventKind.messageEnds,
+            state.absoluteOffset
+        )
+    ];
+}
+
+FrameEvent[] frameMboxBytes(scope const(char)[] bytes) @safe
+{
+    auto result = feedMboxFramer(initialMboxFramer(), bytes);
+    return result.events ~ finishMboxFramer(result.state);
+}
+
+FrameEvent[] frameMboxChunks(
+    scope const(char)[] first,
+    scope const(char)[] second
+) @safe
+{
+    auto firstResult = feedMboxFramer(initialMboxFramer(), first);
+    auto secondResult = feedMboxFramer(firstResult.state, second);
+    return firstResult.events
+        ~ secondResult.events
+        ~ finishMboxFramer(secondResult.state);
+}
+
+
 unittest {
     enum sample =
         "From alice@example.org Tue Sep 29 12:00:00 2026\n" ~
