@@ -24,8 +24,12 @@ record ByteCount where
     number : Number
 
 public export
+data DigestAlgorithm = SHA256
+
+public export
 record SourceDigest where
     constructor Digest
+    algorithm : DigestAlgorithm
     hexadecimal : Text
 
 public export
@@ -66,6 +70,13 @@ record Two a where
     constructor PairOf
     first : a
     second : a
+
+public export
+record TwoOrMore a where
+    constructor TwoThen
+    first : a
+    second : a
+    rest : List a
 
 public export
 record Four a where

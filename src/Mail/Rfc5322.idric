@@ -26,12 +26,9 @@ record ObsoleteFoldingWhiteSpace where
     source : SourceSlice
 
 public export
-record CurrentFoldingWhiteSpace where
-    constructor FoldedWhiteSpace
-    source : SourceSlice
-    leading_white_space : List WhiteSpace
-    fold : Maybe CRLF
-    trailing_white_space : OneOrMore WhiteSpace
+data CurrentFoldingWhiteSpace
+    = SingleLineFWS SourceSlice (OneOrMore WhiteSpace)
+    | FoldedFWS SourceSlice (List WhiteSpace) CRLF (OneOrMore WhiteSpace)
 
 public export
 data FoldingWhiteSpace
@@ -44,9 +41,15 @@ record ObsoleteNoWhiteSpaceControl where
     source : SourceSlice
 
 public export
+record ObsoleteCommentText where
+    constructor HistoricalCommentText
+    source : SourceSlice
+    control : ObsoleteNoWhiteSpaceControl
+
+public export
 data CommentText
     = CurrentCommentText SourceSlice
-    | ObsoleteCommentText ObsoleteNoWhiteSpaceControl
+    | ObsoleteCommentTextSyntax ObsoleteCommentText
 
 public export
 data CommentContent
@@ -144,9 +147,15 @@ data Special
 
 -- 3.2.4 qtext, qcontent, quoted-string
 public export
+record ObsoleteQuotedText where
+    constructor HistoricalQuotedText
+    source : SourceSlice
+    control : ObsoleteNoWhiteSpaceControl
+
+public export
 data QuotedText
     = CurrentQuotedText SourceSlice
-    | ObsoleteQuotedText ObsoleteNoWhiteSpaceControl
+    | ObsoleteQuotedTextSyntax ObsoleteQuotedText
 
 public export
 data QuotedContent
@@ -185,14 +194,25 @@ data Phrase
     | ObsoletePhraseSyntax ObsoletePhrase
 
 public export
+record ObsoleteUnstructuredText where
+    constructor HistoricalUnstructuredText
+    source : SourceSlice
+
+public export
 record ObsoleteUnstructured where
     constructor HistoricalUnstructured
     source : SourceSlice
+    text : List ObsoleteUnstructuredText
 
 public export
 data Unstructured
     = CurrentUnstructured SourceSlice
     | ObsoleteUnstructuredSyntax ObsoleteUnstructured
+
+-- Current versus obsolete syntax is a semantic distinction, not a Boolean
+-- implementation flag.
+public export
+data SyntaxForm = CurrentSyntax | ObsoleteSyntax
 
 -- 3.3 date-time
 public export
@@ -210,7 +230,7 @@ record DayOfWeek where
     constructor WeekDay
     source : SourceSlice
     name : DayName
-    obsolete_form : Bool
+    syntax : SyntaxForm
 
 public export
 data OneOrTwoDigits
@@ -222,7 +242,7 @@ record Day where
     constructor DayOfMonth
     source : SourceSlice
     digits : OneOrTwoDigits
-    obsolete_form : Bool
+    syntax : SyntaxForm
 
 public export
 data MonthName
@@ -246,33 +266,36 @@ record Month where
     name : MonthName
 
 public export
+data YearDigits
+    = CurrentYearDigits (Four Digit) (List Digit)
+    | ObsoleteYearDigits (TwoOrMore Digit)
+
+public export
 record Year where
     constructor CalendarYear
     source : SourceSlice
-    first_four_digits : Four Digit
-    additional_digits : List Digit
-    obsolete_form : Bool
+    digits : YearDigits
 
 public export
 record Hour where
     constructor HourOfDay
     source : SourceSlice
     digits : Two Digit
-    obsolete_form : Bool
+    syntax : SyntaxForm
 
 public export
 record Minute where
     constructor MinuteOfHour
     source : SourceSlice
     digits : Two Digit
-    obsolete_form : Bool
+    syntax : SyntaxForm
 
 public export
 record Second where
     constructor SecondOfMinute
     source : SourceSlice
     digits : Two Digit
-    obsolete_form : Bool
+    syntax : SyntaxForm
 
 public export
 record TimeOfDay where
@@ -300,9 +323,15 @@ data ObsoleteZoneName
     | MilitaryZone SourceSlice
 
 public export
+record ObsoleteZone where
+    constructor HistoricalZone
+    source : SourceSlice
+    name : ObsoleteZoneName
+
+public export
 data Zone
     = NumericZone SourceSlice FoldingWhiteSpace ZoneSign (Four Digit)
-    | ObsoleteZone SourceSlice ObsoleteZoneName
+    | ObsoleteZoneSyntax ObsoleteZone
 
 public export
 record Time where
@@ -346,10 +375,14 @@ record ObsoleteDomain where
     source : SourceSlice
 
 public export
-record DomainText where
-    constructor DomainLiteralText
+record ObsoleteDomainText where
+    constructor HistoricalDomainText
     source : SourceSlice
-    obsolete_form : Bool
+
+public export
+data DomainText
+    = CurrentDomainText SourceSlice
+    | ObsoleteDomainTextSyntax ObsoleteDomainText
 
 public export
 record DomainLiteral where
@@ -804,13 +837,133 @@ record ObsoleteFields where
     source : SourceSlice
 
 public export
-record ObsoleteHeaderField where
-    constructor HistoricalHeaderField
+record ObsoleteOriginationDateField where
+    constructor HistoricalOriginationDateField
     source : SourceSlice
+
+public export
+record ObsoleteFromField where
+    constructor HistoricalFromField
+    source : SourceSlice
+
+public export
+record ObsoleteSenderField where
+    constructor HistoricalSenderField
+    source : SourceSlice
+
+public export
+record ObsoleteReplyToField where
+    constructor HistoricalReplyToField
+    source : SourceSlice
+
+public export
+record ObsoleteToField where
+    constructor HistoricalToField
+    source : SourceSlice
+
+public export
+record ObsoleteCcField where
+    constructor HistoricalCcField
+    source : SourceSlice
+
+public export
+record ObsoleteBccField where
+    constructor HistoricalBccField
+    source : SourceSlice
+
+public export
+record ObsoleteMessageIdField where
+    constructor HistoricalMessageIdField
+    source : SourceSlice
+
+public export
+record ObsoleteInReplyToField where
+    constructor HistoricalInReplyToField
+    source : SourceSlice
+
+public export
+record ObsoleteReferencesField where
+    constructor HistoricalReferencesField
+    source : SourceSlice
+
+public export
+record ObsoleteSubjectField where
+    constructor HistoricalSubjectField
+    source : SourceSlice
+
+public export
+record ObsoleteCommentsField where
+    constructor HistoricalCommentsField
+    source : SourceSlice
+
+public export
+record ObsoleteKeywordsField where
+    constructor HistoricalKeywordsField
+    source : SourceSlice
+
+public export
+record ObsoleteResentFromField where
+    constructor HistoricalResentFromField
+    source : SourceSlice
+
+public export
+record ObsoleteResentSenderField where
+    constructor HistoricalResentSenderField
+    source : SourceSlice
+
+public export
+record ObsoleteResentDateField where
+    constructor HistoricalResentDateField
+    source : SourceSlice
+
+public export
+record ObsoleteResentToField where
+    constructor HistoricalResentToField
+    source : SourceSlice
+
+public export
+record ObsoleteResentCcField where
+    constructor HistoricalResentCcField
+    source : SourceSlice
+
+public export
+record ObsoleteResentBccField where
+    constructor HistoricalResentBccField
+    source : SourceSlice
+
+public export
+record ObsoleteResentMessageIdField where
+    constructor HistoricalResentMessageIdField
+    source : SourceSlice
+
+public export
+record ObsoleteResentReplyToField where
+    constructor HistoricalResentReplyToField
+    source : SourceSlice
+
+public export
+record ObsoleteReturnPathField where
+    constructor HistoricalReturnPathField
+    source : SourceSlice
+
+public export
+record ObsoleteReceivedField where
+    constructor HistoricalReceivedField
+    source : SourceSlice
+
+public export
+record ObsoleteOptionalField where
+    constructor HistoricalOptionalField
+    source : SourceSlice
+
+public export
+record ProductionName where
+    constructor RfcProduction
+    spelling : Text
 
 public export
 record HeaderDefect where
     constructor Rfc5322Defect
     source : SourceSlice
-    expected_production : Text
-    observed_context : Text
+    expected_production : ProductionName
+    observed : SourceSlice

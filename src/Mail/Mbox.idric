@@ -12,7 +12,7 @@ import Mail.Rfc5322
 public export
 record EnvelopeLine where
     constructor MboxEnvelopeLine
-    source : OctetRange
+    source : SourceSlice
 
 public export
 data StoredLineEnding
@@ -22,10 +22,10 @@ data StoredLineEnding
 public export
 record MessageView where
     constructor Message
-    envelope_range : OctetRange
-    message_range : OctetRange
-    header_range : OctetRange
-    body_range : OctetRange
+    envelope : SourceSlice
+    message : SourceSlice
+    header_section : SourceSlice
+    body : SourceSlice
     headers : List HeaderField
     defects : List HeaderDefect
 
