@@ -113,7 +113,7 @@ events_for_new_envelope (Just previous) begins_at =
     [MessageEnds begins_at, EnvelopeBegins begins_at]
 
 continue_candidate : FramerState → EnvelopeCandidate → MailSourceOctet → FeedResult
-continue_candidate (Framer offset line_start candidate open) (Candidate begins progress) octet =
+continue_candidate (Framer offset line_start candidate open_entry_start) (Candidate begins progress) octet =
         if same_source_octet octet (expected_separator_octet progress)
            then
                case advance_separator_progress progress of
@@ -124,14 +124,14 @@ continue_candidate (Framer offset line_start candidate open) (Candidate begins p
                                False
                                Nothing
                                (Just begins))
-                           (events_for_new_envelope open begins)
+                           (events_for_new_envelope open_entry_start begins)
                    Just next_progress =>
                        Fed
                            (Framer
                                (advance offset)
                                False
                                (Just (Candidate begins next_progress))
-                               open)
+                               open_entry_start)
                            []
            else
                Fed
@@ -139,11 +139,11 @@ continue_candidate (Framer offset line_start candidate open) (Candidate begins p
                        (advance offset)
                        (is_line_feed octet)
                        Nothing
-                       open)
+                       open_entry_start)
                    []
 
 start_or_skip : FramerState → MailSourceOctet → FeedResult
-start_or_skip (Framer offset line_start candidate open) octet =
+start_or_skip (Framer offset line_start candidate open_entry_start) octet =
         if line_start && same_source_octet octet upper_f_octet
            then
                Fed
@@ -151,7 +151,7 @@ start_or_skip (Framer offset line_start candidate open) octet =
                        (advance offset)
                        False
                        (Just (Candidate offset SawF))
-                       open)
+                       open_entry_start)
                    []
            else
                Fed
@@ -159,7 +159,7 @@ start_or_skip (Framer offset line_start candidate open) octet =
                        (advance offset)
                        (is_line_feed octet)
                        Nothing
-                       open)
+                       open_entry_start)
                    []
 
 feed_octet : FramerState → MailSourceOctet → FeedResult
