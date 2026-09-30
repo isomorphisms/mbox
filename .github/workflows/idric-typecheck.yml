@@ -6,6 +6,9 @@ on:
       - "Idriç"
     paths:
       - "src/**/*.idric"
+      - "test/generate_idric_*_conformance.py"
+      - "fixtures/**/*.mbox"
+      - "fixtures/manifest.json"
       - "mbox.ipkg"
       - ".github/workflows/idric-typecheck.yml"
   workflow_dispatch:
@@ -102,6 +105,22 @@ jobs:
           )
           grep -Fx 'PASS Idriç shared framing fixtures' mbox/idric-fixtures.out
 
+      - name: Run exact SPEC-LIST selection fixture through Idriç
+        run: |
+          python3 mbox/test/generate_idric_spec_list_conformance.py > mbox/src/SpecListFixtureRuntime.idric
+          support="$GITHUB_WORKSPACE/idric/_"
+          idric_library_path="$support/libs/prelude/build/ttc:$support/libs/base/build/ttc:$support/libs/linear/build/ttc:$support/libs/network/build/ttc:$support/libs/contrib/build/ttc:$support/libs/test/build/ttc:"
+          (
+            cd mbox/src
+            PATH="$support/.tools/bin:$PATH" \
+            CHEZ="$support/.tools/bin/scheme" \
+            IDRIS2_PREFIX="$support/bootstrap-build" \
+            IDRIS2_PATH="$idric_library_path" \
+              "$support/build/exec/idris2" SpecListFixtureRuntime.idric -o idric-spec-list-fixtures
+            ./build/exec/idric-spec-list-fixtures | tee ../idric-spec-list-fixtures.out
+          )
+          grep -Fx 'PASS Idriç SPEC-LIST selection fixture' mbox/idric-spec-list-fixtures.out
+
       - name: Emit normalized Idriç receipt
         working-directory: mbox
         run: |
@@ -126,9 +145,9 @@ jobs:
           addresses.bare-and-display	UNIMPLEMENTED	address view not wired to mbox fixtures
           addresses.quoted-comma	UNIMPLEMENTED	address view not wired to mbox fixtures
           addresses.folded-repeated	UNIMPLEMENTED	address view not wired to mbox fixtures
-          selection.spec-list-positive	UNIMPLEMENTED	refiler selection not implemented
-          selection.body-only-negative	UNIMPLEMENTED	refiler selection not implemented
-          selection.wrong-header-negative	UNIMPLEMENTED	refiler selection not implemented
+          selection.spec-list-positive	PASS	exact Message-ID expectations from spec-list-selection.mbox
+          selection.body-only-negative	PASS	body-only SPEC-LIST fixture is rejected
+          selection.wrong-header-negative	PASS	unconfigured header SPEC-LIST fixtures are rejected
           copy.byte-identical	UNIMPLEMENTED	copy command not implemented
           copy.multiplicity	UNIMPLEMENTED	copy command not implemented
           transaction.ordinary	UNIMPLEMENTED	destructive refiler not implemented
