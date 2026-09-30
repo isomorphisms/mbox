@@ -589,3 +589,88 @@ int main(string[] arguments)
         return 1;
     }
 }
+
+
+unittest {
+    enum sample =
+        "From one@example.org Wed Sep 30 00:00:00 2026\n" ~
+        "From: one@example.org\n" ~
+        "To: SPEC-LIST <spec-list@example.org>\n" ~
+        "Subject: ordinary\n\n" ~
+        "body\n" ~
+        "From two@example.org Wed Sep 30 00:01:00 2026\n" ~
+        "From: two@example.org\n" ~
+        "Subject: weekly Spec-List digest\n\n" ~
+        "body\n" ~
+        "From three@example.org Wed Sep 30 00:02:00 2026\n" ~
+        "From: three@example.org\n" ~
+        "List-Id: SPEC-LIST\n" ~
+        "Subject: unrelated\n\n" ~
+        "SPEC-LIST appears only in an unsearched header and body\n" ~
+        "From four@example.org Wed Sep 30 00:03:00 2026\n" ~
+        "From: four@example.org\n" ~
+        "To: first@example.org\n" ~
+        "To: second@example.org,\n" ~
+        " SPEC-LIST <spec-list@example.org>\n" ~
+        "Subject: folded repeated recipient\n\n" ~
+        "body\n";
+
+    auto source = File.tmpfile();
+    source.rawWrite(sample);
+    source.flush();
+
+    bool[string] wantedHeaders;
+    foreach (name; ["from", "sender", "reply-to", "to", "cc", "subject"])
+        wantedHeaders[name] = true;
+
+    auto matcher = regex("SPEC-LIST", "i");
+    auto selected = selectMessages(source, wantedHeaders, matcher);
+
+    assert(selected.length == 3);
+    assert(selected[0].record.envelopeRange.start == 0);
+
+    MboxRecord oversized;
+    oversized.messageRange.start = 123;
+    oversized.headerRange = ByteRange(0, maxHeaderBytes + 1);
+
+    bool rejected;
+    try {
+        recordMatches(source, oversized, wantedHeaders, matcher);
+    } catch (Exception) {
+        rejected = true;
+    }
+    assert(rejected);
+}
+
+unittest {
+    enum sample =
+        "From envelope-one Wed Sep 30 01:00:00 2026\n" ~
+        "Message-ID: <reused@example.org>\n" ~
+        "Subject: first\n\n" ~
+        "same body\n" ~
+        "From envelope-two Wed Sep 30 01:01:00 2026\n" ~
+        "Message-ID: <reused@example.org>\n" ~
+        "Subject: second\n\n" ~
+        "same body\n" ~
+        "From different-envelope Wed Sep 30 01:02:00 2026\n" ~
+        "Message-ID: <reused@example.org>\n" ~
+        "Subject: first\n\n" ~
+        "same body\n";
+
+    auto source = File.tmpfile();
+    source.rawWrite(sample);
+    source.flush();
+
+    const all = records(source);
+    assert(all.length == 3);
+
+    const first = sha256Range(source, all[0].messageRange);
+    const second = sha256Range(source, all[1].messageRange);
+    const third = sha256Range(source, all[2].messageRange);
+
+    // Reused Message-ID values do not collapse different RFC messages.
+    assert(first != second);
+
+    // The mbox From_ separator is deliberately excluded from the digest.
+    assert(first == third);
+}
