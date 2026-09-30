@@ -63,7 +63,13 @@ branches must be able to disagree with it when the corpus or contract shows that
 it is wrong.
 
 No branch is allowed to redefine the wire format merely to make its own tests
-pass.  Cross-language fixtures and differential receipts belong on `main`.
+pass. Cross-language fixtures and differential receipts belong on `main`.
+
+Every language branch receives the same `fixtures/` tree and
+`tests/conformance/cases.tsv`. Language-specific runners report each case as
+`PASS`, `FAIL`, `UNIMPLEMENTED`, or `BLOCKED`; there are no silent skips.
+A fixture discovered by one implementation therefore becomes a test input for
+all of them.
 
 ## Core semantic values
 
