@@ -1,0 +1,494 @@
+#!/usr/bin/env ysh
+
+# Grease / YSH byte-preserving mboxo and RFC-header core.
+#
+# Strings in YSH are byte strings for len(), slicing, and indexing.  Keep all
+# raw authority in the original mailbox string and expose offsets into it.
+
+const ASCII_LOWER = {
+  'A': 'a', 'B': 'b', 'C': 'c', 'D': 'd', 'E': 'e', 'F': 'f',
+  'G': 'g', 'H': 'h', 'I': 'i', 'J': 'j', 'K': 'k', 'L': 'l',
+  'M': 'm', 'N': 'n', 'O': 'o', 'P': 'p', 'Q': 'q', 'R': 'r',
+  'S': 's', 'T': 't', 'U': 'u', 'V': 'v', 'W': 'w', 'X': 'x',
+  'Y': 'y', 'Z': 'z',
+}
+
+func byte_range(start, end) {
+  return ({start, end})
+}
+
+func range_bytes(bytes, span) {
+  return (bytes[span.start : span.end])
+}
+
+func starts_with_at(bytes, at, needle) {
+  if (at < 0) {
+    return (false)
+  }
+  if (at + len(needle) > len(bytes)) {
+    return (false)
+  }
+  return (bytes[at : at + len(needle)] === needle)
+}
+
+func is_ascii_wsp(c) {
+  if (c === ' ') {
+    return (true)
+  }
+  if (c === b'\y09') {
+    return (true)
+  }
+  return (false)
+}
+
+func ascii_lower(s) {
+  var out = ''
+  for i in (0 ..< len(s)) {
+    var c = s[i]
+    if (c in ASCII_LOWER) {
+      setvar out = out ++ ASCII_LOWER[c]
+    } else {
+      setvar out = out ++ c
+    }
+  }
+  return (out)
+}
+
+func ascii_equal_insensitive(a, b) {
+  if (len(a) !== len(b)) {
+    return (false)
+  }
+  return (ascii_lower(a) === ascii_lower(b))
+}
+
+func trim_ascii(s) {
+  var first = -1
+  var last = 0
+
+  for i in (0 ..< len(s)) {
+    var c = s[i]
+    if (is_ascii_wsp(c) === false) {
+      if (first === -1) {
+        setvar first = i
+      }
+      setvar last = i + 1
+    }
+  }
+
+  if (first === -1) {
+    return ('')
+  }
+  return (s[first : last])
+}
+
+func line_ranges(bytes, begin, end) {
+  var out = []
+  var start = begin
+
+  for i in (begin ..< end) {
+    if (bytes[i] === b'\y0a') {
+      call out->append({start, end: i + 1})
+      setvar start = i + 1
+    }
+  }
+
+  if (start < end) {
+    call out->append({start, end})
+  }
+  return (out)
+}
+
+func logical_line_end(bytes, line) {
+  var end = line.end
+
+  if (end > line.start) {
+    if (bytes[end - 1] === b'\y0a') {
+      setvar end -= 1
+    }
+  }
+  if (end > line.start) {
+    if (bytes[end - 1] === b'\y0d') {
+      setvar end -= 1
+    }
+  }
+  return (end)
+}
+
+func find_byte(bytes, needle, begin, end) {
+  for i in (begin ..< end) {
+    if (bytes[i] === needle) {
+      return (i)
+    }
+  }
+  return (-1)
+}
+
+func append_fold(previous, continuation) {
+  var tail = trim_ascii(continuation)
+  if (previous === '') {
+    return (tail)
+  }
+  return (previous ++ ' ' ++ tail)
+}
+
+func parse_headers(bytes, begin, end) {
+  var fields = []
+  var header_end = end
+  var body_begin = end
+
+  for line in (line_ranges(bytes, begin, end)) {
+    var content_end = logical_line_end(bytes, line)
+
+    if (content_end === line.start) {
+      setvar header_end = line.end
+      setvar body_begin = line.end
+      break
+    }
+
+    var continuation = is_ascii_wsp(bytes[line.start])
+
+    if (continuation) {
+      if (len(fields) !== 0) {
+        var previous = fields[-1]
+        if (previous.malformed === false) {
+          setvar previous.raw_range.end = line.end
+          setvar previous.raw_value_range.end = content_end
+          setvar previous.unfolded_value = append_fold(
+            previous.unfolded_value,
+            bytes[line.start : content_end]
+          )
+          continue
+        }
+      }
+    }
+
+    var colon = find_byte(bytes, ':', line.start, content_end)
+    var malformed = false
+
+    if (colon === -1) {
+      setvar malformed = true
+    }
+    if (continuation) {
+      setvar malformed = true
+    }
+
+    if (malformed) {
+      call fields->append({
+        raw_range: byte_range(line.start, line.end),
+        name_range: byte_range(line.start, line.start),
+        raw_value_range: byte_range(line.start, line.end),
+        name: '',
+        unfolded_value: trim_ascii(bytes[line.start : content_end]),
+        malformed: true,
+      })
+      continue
+    }
+
+    var raw_name = bytes[line.start : colon]
+    call fields->append({
+      raw_range: byte_range(line.start, line.end),
+      name_range: byte_range(line.start, colon),
+      raw_value_range: byte_range(colon + 1, content_end),
+      name: ascii_lower(raw_name),
+      unfolded_value: trim_ascii(bytes[colon + 1 : content_end]),
+      malformed: false,
+    })
+  }
+
+  return ({
+    fields,
+    header_end,
+    body_begin,
+  })
+}
+
+func envelope_starts(bytes) {
+  var starts = []
+  if (starts_with_at(bytes, 0, 'From ')) {
+    call starts->append(0)
+  }
+
+  for i in (1 ..< len(bytes)) {
+    if (bytes[i - 1] === b'\y0a') {
+      if (starts_with_at(bytes, i, 'From ')) {
+        call starts->append(i)
+      }
+    }
+  }
+  return (starts)
+}
+
+func first_line_end(bytes, begin, end) {
+  for i in (begin ..< end) {
+    if (bytes[i] === b'\y0a') {
+      return (i + 1)
+    }
+  }
+  return (end)
+}
+
+func parse_mbox(bytes) {
+  var messages = []
+  var starts = envelope_starts(bytes)
+
+  for index, envelope_start in (starts) {
+    var entry_end = len(bytes)
+    if (index + 1 < len(starts)) {
+      setvar entry_end = starts[index + 1]
+    }
+
+    var message_start = first_line_end(bytes, envelope_start, entry_end)
+    var parsed_headers = parse_headers(bytes, message_start, entry_end)
+
+    call messages->append({
+      envelope_range: byte_range(envelope_start, message_start),
+      message_range: byte_range(message_start, entry_end),
+      header_range: byte_range(message_start, parsed_headers.header_end),
+      body_range: byte_range(parsed_headers.body_begin, entry_end),
+      headers: parsed_headers.fields,
+    })
+  }
+
+  return (messages)
+}
+
+func read_mbox(path) {
+  var bytes = ''
+  read --all (&bytes) < "$path"
+  return ({bytes, messages: parse_mbox(bytes)})
+}
+
+func header_values(message, name) {
+  var out = []
+  var wanted = ascii_lower(name)
+
+  for field in (message.headers) {
+    if (field.malformed === false) {
+      if (field.name === wanted) {
+        call out->append(field.unfolded_value)
+      }
+    }
+  }
+  return (out)
+}
+
+func header_raw_bytes(bytes, field) {
+  return (range_bytes(bytes, field.raw_range))
+}
+
+func header_raw_value_bytes(bytes, field) {
+  return (range_bytes(bytes, field.raw_value_range))
+}
+
+func rfc_message_bytes(bytes, message) {
+  return (range_bytes(bytes, message.message_range))
+}
+
+func entry_bytes(bytes, message) {
+  return (bytes[message.envelope_range.start : message.message_range.end])
+}
+
+func unquote_display(input) {
+  var s = trim_ascii(input)
+
+  if (len(s) < 2) {
+    return (s)
+  }
+  if (s[0] !== '"') {
+    return (s)
+  }
+  if (s[-1] !== '"') {
+    return (s)
+  }
+
+  var out = ''
+  var escaped = false
+
+  for i in (1 ..< (len(s) - 1)) {
+    var c = s[i]
+    if (escaped) {
+      setvar out = out ++ c
+      setvar escaped = false
+      continue
+    }
+    if (c === b'\y5c') {
+      setvar escaped = true
+      continue
+    }
+    setvar out = out ++ c
+  }
+
+  if (escaped) {
+    setvar out = out ++ b'\y5c'
+  }
+  return (out)
+}
+
+func parse_mailbox_token(token) {
+  var s = trim_ascii(token)
+  var lt = -1
+  var gt = -1
+  var quoted = false
+  var escaped = false
+
+  for i in (0 ..< len(s)) {
+    var c = s[i]
+
+    if (escaped) {
+      setvar escaped = false
+      continue
+    }
+
+    if (quoted) {
+      if (c === b'\y5c') {
+        setvar escaped = true
+        continue
+      }
+    }
+
+    if (c === '"') {
+      if (quoted) {
+        setvar quoted = false
+      } else {
+        setvar quoted = true
+      }
+      continue
+    }
+
+    if (quoted === false) {
+      if (c === '<') {
+        if (lt === -1) {
+          setvar lt = i
+        }
+      } else {
+        if (c === '>') {
+          if (lt !== -1) {
+            setvar gt = i
+            break
+          }
+        }
+      }
+    }
+  }
+
+  if (lt !== -1) {
+    if (gt > lt) {
+      return ({
+        display_name: unquote_display(s[0 : lt]),
+        addr_spec: trim_ascii(s[lt + 1 : gt]),
+      })
+    }
+  }
+
+  return ({display_name: '', addr_spec: trim_ascii(s)})
+}
+
+func parse_addresses(field_values) {
+  var out = []
+
+  for value in (field_values) {
+    var start = 0
+    var quoted = false
+    var escaped = false
+    var angle_depth = 0
+
+    for i in (0 ..< len(value)) {
+      var c = value[i]
+
+      if (escaped) {
+        setvar escaped = false
+        continue
+      }
+
+      if (quoted) {
+        if (c === b'\y5c') {
+          setvar escaped = true
+          continue
+        }
+      }
+
+      if (c === '"') {
+        if (quoted) {
+          setvar quoted = false
+        } else {
+          setvar quoted = true
+        }
+        continue
+      }
+
+      if (quoted === false) {
+        if (c === '<') {
+          setvar angle_depth += 1
+          continue
+        }
+        if (c === '>') {
+          if (angle_depth > 0) {
+            setvar angle_depth -= 1
+          }
+          continue
+        }
+        if (c === ',') {
+          if (angle_depth === 0) {
+            var token = trim_ascii(value[start : i])
+            if (token !== '') {
+              call out->append(parse_mailbox_token(token))
+            }
+            setvar start = i + 1
+          }
+        }
+      }
+    }
+
+    var token = trim_ascii(value[start :])
+    if (token !== '') {
+      call out->append(parse_mailbox_token(token))
+    }
+  }
+
+  return (out)
+}
+
+func recipients(message) {
+  var values = []
+
+  for field in (message.headers) {
+    if (field.malformed) {
+      continue
+    }
+    if (field.name === 'to') {
+      call values->append(field.unfolded_value)
+      continue
+    }
+    if (field.name === 'cc') {
+      call values->append(field.unfolded_value)
+    }
+  }
+
+  return (parse_addresses(values))
+}
+
+func last_byte_index(s, needle) {
+  var found = -1
+  for i in (0 ..< len(s)) {
+    if (s[i] === needle) {
+      setvar found = i
+    }
+  }
+  return (found)
+}
+
+func addr_spec_matches_domain_fold(a, b) {
+  var aa = last_byte_index(a, '@')
+  var bb = last_byte_index(b, '@')
+
+  if (aa === -1) {
+    return (a === b)
+  }
+  if (bb === -1) {
+    return (a === b)
+  }
+  if (a[0 : aa] !== b[0 : bb]) {
+    return (false)
+  }
+  return (ascii_equal_insensitive(a[aa + 1 :], b[bb + 1 :]))
+}
