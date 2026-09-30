@@ -512,3 +512,38 @@ unittest {
         "spec-list@example.org"
     ));
 }
+
+
+unittest {
+    enum sample =
+        "junk before first message\n" ~
+        "From alice@example.org Tue Sep 29 12:00:00 2026\n" ~
+        "From: Alice <alice@example.org>\n" ~
+        "To: SPEC-LIST <spec-list@example.org>\n" ~
+        "Subject: first\n\n" ~
+        "alpha\n" ~
+        ">From quoted body text\n" ~
+        "From bob@example.org Tue Sep 29 12:01:00 2026\r\n" ~
+        "From: Bob <bob@example.org>\r\n" ~
+        "Subject: second\r\n\r\n" ~
+        "beta\r\n";
+
+    auto expected = parseMbox(sample);
+
+    auto file = File.tmpfile();
+    file.rawWrite(cast(const(ubyte)[]) sample);
+    file.flush();
+
+    MboxRecord[] streamed;
+    scanMbox(file, (in MboxRecord record) {
+        streamed ~= record;
+    });
+
+    assert(streamed.length == expected.length);
+    foreach (i; 0 .. streamed.length) {
+        assert(streamed[i].envelopeRange == expected[i].envelopeRange);
+        assert(streamed[i].messageRange == expected[i].messageRange);
+        assert(streamed[i].headerRange == expected[i].headerRange);
+        assert(streamed[i].bodyRange == expected[i].bodyRange);
+    }
+}
