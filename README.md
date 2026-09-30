@@ -50,13 +50,26 @@ a stable snapshot.
 
 Parallel implementations live on language branches:
 
-- `D` — working systems implementation;
+- `Idriç` — **standard-bearer/reference executable** for the library;
+- `D` — independent systems implementation and performance cross-check;
 - `Agda` — executable/type-level model of the framing and header invariants;
-- `Idris` — typed implementation intended to become executable;
+- `Idris` — ordinary Idris compatibility/comparison implementation;
 - further language branches may share the same corpus and semantics.
 
+"Standard bearer" does not make Idriç the specification.  `CONTRACT.md` and
+the shared corpus on `main` remain language-neutral.  Idriç is simply the
+implementation that should reach new complete behavior first; the other
+branches must be able to disagree with it when the corpus or contract shows that
+it is wrong.
+
 No branch is allowed to redefine the wire format merely to make its own tests
-pass.  Cross-language fixtures and differential receipts belong on `main`.
+pass. Cross-language fixtures and differential receipts belong on `main`.
+
+Every language branch receives the same `fixtures/` tree and
+`tests/conformance/cases.tsv`. Language-specific runners report each case as
+`PASS`, `FAIL`, `UNIMPLEMENTED`, or `BLOCKED`; there are no silent skips.
+A fixture discovered by one implementation therefore becomes a test input for
+all of them.
 
 ## Core semantic values
 

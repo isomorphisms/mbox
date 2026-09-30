@@ -123,3 +123,44 @@ A language branch is conformant to v0 only when the shared fixtures demonstrate:
   feature.
 
 Implementation convenience is not a reason to change this contract.
+
+
+## 9. Destructive refile transactions and duplicates
+
+A destructive refile preserves **occurrences**, not merely distinct content.
+Two byte-identical source entries are two entries and both must survive in the
+archive. A matching `Message-ID`, RFC-message hash, or whole-entry hash already
+present in the archive is never by itself proof that the current source
+occurrence has been copied.
+
+Crash-safe exactly-once recovery therefore requires transaction identity. Before
+source deletion can be recoverable, durable state must identify at least:
+
+- the source snapshot being acted on;
+- the selected whole-entry byte ranges, in source order;
+- the archive baseline at transaction start;
+- which archive byte range(s) were appended by this transaction; and
+- whether those appended bytes were durably flushed.
+
+Recovery may use hashes to verify those recorded bytes and ranges. It must not
+turn a hash into set-based deduplication.
+
+The recovery rules are:
+
+1. make the transaction record durable before destructive progress;
+2. append selected occurrences in order and record enough progress to identify
+   this transaction's own append, even when identical bytes predate it;
+3. fsync the archive before removing any source occurrence;
+4. after a crash, verify the recorded source snapshot and transaction-owned
+   archive bytes before continuing;
+5. an unchanged recorded source prefix plus a newly appended source tail is
+   recoverable; preserve the tail;
+6. any other mutation of the recorded source prefix is a refusal condition;
+7. once the archive append is known durable, recovery must not append the same
+   transaction occurrences again;
+8. do not discard the transaction record until the replacement source state is
+   itself durable.
+
+The byte fixtures under `fixtures/transactions/` are normative examples of
+these rules. Their JSON files describe semantic recovery state; they do not
+mandate one journal serialization.

@@ -1,0 +1,65 @@
+{
+  "version": 1,
+  "transaction_id": "tx-duplicate-recovery-001",
+  "source_snapshot": {
+    "bytes": 956,
+    "sha256": "d1d9cd2ab56876eb334fb1656c180833071b9930b29afbd64ffee7bd94d4fc3f"
+  },
+  "selected": [
+    {
+      "ordinal": 0,
+      "source_range": [
+        185,
+        362
+      ],
+      "bytes": 177,
+      "sha256": "874e9a783963ece8ccb2a15cd381e093a9ee0a61de68c46d8543d21265e2dc7d"
+    },
+    {
+      "ordinal": 1,
+      "source_range": [
+        362,
+        569
+      ],
+      "bytes": 207,
+      "sha256": "7f9af876891b3f609e685ed414f8314569181ec5092de091109cadb19b8afee2"
+    },
+    {
+      "ordinal": 2,
+      "source_range": [
+        569,
+        776
+      ],
+      "bytes": 207,
+      "sha256": "7f9af876891b3f609e685ed414f8314569181ec5092de091109cadb19b8afee2"
+    }
+  ],
+  "archive_baseline": {
+    "bytes": 395,
+    "sha256": "98a931ba87d1a0a40cb5a2de4eb6858bdfecc7d232e2867552e54d636669ce53"
+  },
+  "phase": "archive_fsynced",
+  "archive_append": {
+    "completed_occurrences": 3,
+    "range": [
+      395,
+      986
+    ],
+    "bytes": 591,
+    "sha256": "cb05db10bc11d7ebb3ac7cd4e86ae2f523aec087cde732db9804c8d4a029d51e",
+    "fsynced": true
+  },
+  "observed_state": {
+    "source": "common/source-with-new-tail.mbox",
+    "archive": "common/expected-archive.mbox"
+  },
+  "expected": {
+    "action": "finish_source_preserve_tail",
+    "source": "common/expected-source-with-new-tail.mbox",
+    "archive": "common/expected-archive.mbox"
+  },
+  "allowed_source_tail": {
+    "starts_at": 956,
+    "policy": "append-only"
+  }
+}
