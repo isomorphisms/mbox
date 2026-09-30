@@ -51,3 +51,20 @@ A `PASS` beside `UNIMPLEMENTED` is a capability difference, not a semantic
 disagreement. `BLOCKED` means the maintained execution path could not run the
 implemented behavior. Any `FAIL` makes the comparator fail: that is the signal
 that the implementations and shared contract/fixtures need to teach each other.
+
+
+## Branch-to-branch matrix
+
+Each language branch publishes `tests/conformance/expected.tsv`. Its own CI
+must produce an actual receipt and compare it byte-for-byte with that expected
+receipt. This makes the branch status a reviewable declaration backed by that
+branch's tests.
+
+With the language refs already present locally, run:
+
+```sh
+sh tests/conformance/compare-branches.sh
+```
+
+The default matrix is D, Agda, Grease, Idriç, and Idris. The script never fetches
+or moves refs; a caller that wants remote branches must fetch them first.
