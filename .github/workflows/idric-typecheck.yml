@@ -1,0 +1,39 @@
+name: Idriç mail typecheck
+
+on:
+  push:
+    branches:
+      - "Idriç"
+    paths:
+      - "src/**/*.idric"
+      - "mbox.ipkg"
+      - ".github/workflows/idric-typecheck.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out mbox
+        uses: actions/checkout@v4
+        with:
+          path: mbox
+
+      - name: Check out maintained Idriç compiler
+        uses: actions/checkout@v4
+        with:
+          repository: isomorphisms/Idric
+          ref: "Idriç"
+          path: idric
+
+      - name: Bootstrap Idriç
+        working-directory: idric
+        run: ./edric bootstrap
+
+      - name: Typecheck RFC-shaped mail modules
+        run: |
+          ./idric/edric --emit-one-step             mbox/src/MailTypecheck.idric             -o mbox/idric-mail.one-step
+          grep -F "$(printf 'core_typecheck\tPASS')" mbox/idric-mail.one-step

@@ -1,0 +1,9 @@
+module MailTypecheck
+
+import Mail.Source
+import Mail.Rfc5234
+import Mail.Rfc5322
+import Mail.Mbox
+
+main : IO ()
+main = pure ()
