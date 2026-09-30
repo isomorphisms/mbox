@@ -89,6 +89,12 @@ left_square_bracket_octet = source_octet 91
 right_square_bracket_octet : MailSourceOctet
 right_square_bracket_octet = source_octet 93
 
+left_parenthesis_octet : MailSourceOctet
+left_parenthesis_octet = source_octet 40
+
+right_parenthesis_octet : MailSourceOctet
+right_parenthesis_octet = source_octet 41
+
 exclamation_mark_octet : MailSourceOctet
 exclamation_mark_octet = source_octet 33
 
@@ -985,3 +991,233 @@ read_current_addr_spec_without_cfws
                                             separator
                                             domain)
                                         after_domain
+
+
+read_comment_opening : LexerCursor → Maybe (Parsed CommentOpeningParenthesis)
+read_comment_opening
+    (AtMailSource source begins (octet :: rest)) =
+        if same_source_octet octet left_parenthesis_octet
+           then
+               let ends = advance_offset begins
+               in Just $
+                    ParsedValue
+                        (OpensComment
+                            (slice_between source begins ends))
+                        (AtMailSource source ends rest)
+           else Nothing
+read_comment_opening _ = Nothing
+
+read_comment_closing : LexerCursor → Maybe (Parsed CommentClosingParenthesis)
+read_comment_closing
+    (AtMailSource source begins (octet :: rest)) =
+        if same_source_octet octet right_parenthesis_octet
+           then
+               let ends = advance_offset begins
+               in Just $
+                    ParsedValue
+                        (ClosesComment
+                            (slice_between source begins ends))
+                        (AtMailSource source ends rest)
+           else Nothing
+read_comment_closing _ = Nothing
+
+comment_text_at : SourceIdentity → OctetOffset → MailSourceOctet → Maybe CommentText
+comment_text_at source offset octet =
+    if source_octet_is_ascii_visible octet
+       && not (same_source_octet octet left_parenthesis_octet)
+       && not (same_source_octet octet right_parenthesis_octet)
+       && not (same_source_octet octet reverse_solidus_octet)
+       then Just $
+            CurrentCommentText (single_octet_slice source offset)
+       else Nothing
+
+read_current_comment_text : LexerCursor → Maybe (Parsed CommentText)
+read_current_comment_text
+    (AtMailSource source begins (octet :: rest)) =
+        case comment_text_at source begins octet of
+            Nothing => Nothing
+            Just comment_text =>
+                Just $
+                    ParsedValue
+                        comment_text
+                        (AtMailSource source (advance_offset begins) rest)
+read_current_comment_text _ = Nothing
+
+record CommentScan where
+    constructor ScannedComment
+    parts : List CommentPart
+    final_folding_white_space : Maybe FoldingWhiteSpace
+    after : LexerCursor
+
+mutual
+    read_current_comment_with_fuel :
+        List MailSourceOctet →
+        LexerCursor →
+        Maybe (Parsed Comment)
+    read_current_comment_with_fuel [] cursor = Nothing
+    read_current_comment_with_fuel (_ :: fuel)
+        cursor@(AtMailSource source begins octets) =
+            case read_comment_opening cursor of
+                Nothing => Nothing
+                Just (ParsedValue opening after_opening) =>
+                    case scan_current_comment
+                             fuel
+                             after_opening
+                             [] of
+                        ScannedComment parts final_fws before_closing =>
+                            case read_comment_closing before_closing of
+                                Nothing => Nothing
+                                Just (ParsedValue closing after_closing) =>
+                                    Just $
+                                        ParsedValue
+                                            (ParenthesizedComment
+                                                (slice_between
+                                                    source
+                                                    begins
+                                                    (next_octet after_closing))
+                                                opening
+                                                parts
+                                                final_fws
+                                                closing)
+                                            after_closing
+
+    read_current_comment_content :
+        List MailSourceOctet →
+        LexerCursor →
+        Maybe (Parsed CommentContent)
+    read_current_comment_content fuel cursor =
+        case read_current_comment_text cursor of
+            Just (ParsedValue text after) =>
+                Just $
+                    ParsedValue
+                        (CommentCharacters text)
+                        after
+            Nothing =>
+                case read_current_quoted_pair cursor of
+                    Just (ParsedValue quoted_pair after) =>
+                        Just $
+                            ParsedValue
+                                (CommentQuotedPair quoted_pair)
+                                after
+                    Nothing =>
+                        case read_current_comment_with_fuel fuel cursor of
+                            Nothing => Nothing
+                            Just (ParsedValue nested after) =>
+                                Just $
+                                    ParsedValue
+                                        (NestedComment nested)
+                                        after
+
+    scan_current_comment :
+        List MailSourceOctet →
+        LexerCursor →
+        List CommentPart →
+        CommentScan
+    scan_current_comment [] cursor accumulated =
+        ScannedComment (reverse accumulated) Nothing cursor
+    scan_current_comment (_ :: fuel) cursor accumulated =
+        case read_current_folding_white_space cursor of
+            Just (ParsedValue folding_white_space after_fws) =>
+                case read_current_comment_content fuel after_fws of
+                    Nothing =>
+                        ScannedComment
+                            (reverse accumulated)
+                            (Just folding_white_space)
+                            after_fws
+                    Just (ParsedValue content after_content) =>
+                        scan_current_comment
+                            fuel
+                            after_content
+                            (CommentPiece
+                                (Just folding_white_space)
+                                content
+                             :: accumulated)
+            Nothing =>
+                case read_current_comment_content fuel cursor of
+                    Nothing =>
+                        ScannedComment
+                            (reverse accumulated)
+                            Nothing
+                            cursor
+                    Just (ParsedValue content after_content) =>
+                        scan_current_comment
+                            fuel
+                            after_content
+                            (CommentPiece Nothing content
+                             :: accumulated)
+
+read_current_comment : LexerCursor → Maybe (Parsed Comment)
+read_current_comment
+    cursor@(AtMailSource source begins octets) =
+        read_current_comment_with_fuel octets cursor
+
+record CommentSequenceScan where
+    constructor ScannedCommentSequence
+    comments : List (Maybe FoldingWhiteSpace, Comment)
+    final_folding_white_space : Maybe FoldingWhiteSpace
+    after : LexerCursor
+
+scan_cfws_comments :
+    List MailSourceOctet →
+    LexerCursor →
+    List (Maybe FoldingWhiteSpace, Comment) →
+    CommentSequenceScan
+scan_cfws_comments [] cursor accumulated =
+    ScannedCommentSequence
+        (reverse accumulated)
+        Nothing
+        cursor
+scan_cfws_comments (_ :: fuel) cursor accumulated =
+    case read_current_folding_white_space cursor of
+        Just (ParsedValue folding_white_space after_fws) =>
+            case read_current_comment after_fws of
+                Just (ParsedValue comment after_comment) =>
+                    scan_cfws_comments
+                        fuel
+                        after_comment
+                        ((Just folding_white_space, comment)
+                         :: accumulated)
+                Nothing =>
+                    case accumulated of
+                        [] =>
+                            ScannedCommentSequence [] Nothing cursor
+                        _ =>
+                            ScannedCommentSequence
+                                (reverse accumulated)
+                                (Just folding_white_space)
+                                after_fws
+        Nothing =>
+            case read_current_comment cursor of
+                Just (ParsedValue comment after_comment) =>
+                    scan_cfws_comments
+                        fuel
+                        after_comment
+                        ((Nothing, comment) :: accumulated)
+                Nothing =>
+                    ScannedCommentSequence
+                        (reverse accumulated)
+                        Nothing
+                        cursor
+
+read_current_cfws : LexerCursor → Maybe (Parsed CommentsAndFoldingWhiteSpace)
+read_current_cfws cursor@(AtMailSource source begins octets) =
+    case scan_cfws_comments octets cursor [] of
+        ScannedCommentSequence [] final_fws after =>
+            case read_current_folding_white_space cursor of
+                Nothing => Nothing
+                Just (ParsedValue folding_white_space after_fws) =>
+                    Just $
+                        ParsedValue
+                            (FoldingWhiteSpaceOnly folding_white_space)
+                            after_fws
+        ScannedCommentSequence (first :: rest) final_fws after =>
+            Just $
+                ParsedValue
+                    (CommentsWithOptionalFWS
+                        (slice_between
+                            source
+                            begins
+                            (next_octet after))
+                        (OneThen first rest)
+                        final_fws)
+                    after

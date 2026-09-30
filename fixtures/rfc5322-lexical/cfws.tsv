@@ -1,0 +1,8 @@
+# hex octets	production	expected result	expected remaining	note
+20	CFWS	FoldingWhiteSpaceOnly	-	FWS alternative
+28 78 29	CFWS	CommentsWithOptionalFWS(comment)	-	one comment
+20 28 78 29	CFWS	CommentsWithOptionalFWS(FWS comment)	-	FWS may precede comment
+28 61 29 20	CFWS	CommentsWithOptionalFWS(comment final-FWS)	-	FWS may follow comment sequence
+28 61 29 20 28 62 29	CFWS	CommentsWithOptionalFWS(comment FWS comment)	-	multiple comments
+28 61 28 62 29 29	CFWS	CommentsWithOptionalFWS(nested comment)	-	nested comments preserved
+58	CFWS	NO_MATCH	58	colon is neither FWS nor comment

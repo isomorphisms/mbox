@@ -1,0 +1,11 @@
+# hex octets	production	expected result	expected remaining	note
+28 29	comment	Comment(empty)	-	empty comment
+28 78 29	comment	Comment(ctext x)	-	ordinary ctext
+28 61 20 62 29	comment	Comment(a FWS b)	-	FWS retained before following ccontent
+28 61 28 62 29 63 29	comment	Comment(a NestedComment(b) c)	-	comments may nest
+28 61 28 62 28 63 29 29 64 29	comment	Comment(nested depth 2)	-	recursive nesting
+28 61 5c 29 62 29	comment	Comment(a quoted-pair-right-paren b)	-	escaped parenthesis is content
+28 61 20 29	comment	Comment(a final-FWS)	-	FWS before closing parenthesis retained separately
+28 61 29 58	comment	Comment(a)	58	closing parenthesis terminates comment
+61 29	comment	NO_MATCH	61 29	must begin with left parenthesis
+28 61	comment	NO_MATCH	28 61	unterminated comment

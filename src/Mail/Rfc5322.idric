@@ -69,16 +69,36 @@ data CommentText
     | ObsoleteCommentTextSyntax ObsoleteCommentText
 
 public export
-data CommentContent
-    = CommentCharacters CommentText
-    | CommentQuotedPair QuotedPair
-    | NestedComment SourceSlice (List CommentContent)
+record CommentOpeningParenthesis where
+    constructor OpensComment
+    source : SourceSlice
 
 public export
-record Comment where
-    constructor ParenthesizedComment
+record CommentClosingParenthesis where
+    constructor ClosesComment
     source : SourceSlice
-    contents : List CommentContent
+
+mutual
+    public export
+    data CommentContent
+        = CommentCharacters CommentText
+        | CommentQuotedPair QuotedPair
+        | NestedComment Comment
+
+    public export
+    record CommentPart where
+        constructor CommentPiece
+        folding_white_space : Maybe FoldingWhiteSpace
+        content : CommentContent
+
+    public export
+    record Comment where
+        constructor ParenthesizedComment
+        source : SourceSlice
+        opening_parenthesis : CommentOpeningParenthesis
+        contents : List CommentPart
+        final_folding_white_space : Maybe FoldingWhiteSpace
+        closing_parenthesis : CommentClosingParenthesis
 
 public export
 data CommentsAndFoldingWhiteSpace
