@@ -7,7 +7,7 @@ framing.content-length-ignored	BLOCKED	D implementation exists; approved Ick/Net
 framing.escaped-from-preserved	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
 framing.empty-body	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
 framing.eof-no-newline	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
-streaming.chunk-equivalence	UNIMPLEMENTED	arbitrary-chunk feed API not implemented in D branch
+streaming.chunk-equivalence	BLOCKED	arbitrary-chunk framer and all-split unit test exist; approved Ick/NetBSD toolchain blocked
 headers.case-insensitive	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
 headers.fold	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
 headers.repeated	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
