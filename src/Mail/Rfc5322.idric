@@ -475,17 +475,33 @@ record AddrSpec where
     domain : Domain
 
 public export
+record AngleAddressOpeningBracket where
+    constructor OpensAngleAddress
+    source : SourceSlice
+
+public export
+record AngleAddressClosingBracket where
+    constructor ClosesAngleAddress
+    source : SourceSlice
+
+public export
+record CurrentAngleAddress where
+    constructor AngleAddressStructure
+    source : SourceSlice
+    before : Maybe CommentsAndFoldingWhiteSpace
+    opening_bracket : AngleAddressOpeningBracket
+    address_specification : AddrSpec
+    closing_bracket : AngleAddressClosingBracket
+    after : Maybe CommentsAndFoldingWhiteSpace
+
+public export
 record ObsoleteAngleAddress where
     constructor HistoricalAngleAddress
     source : SourceSlice
 
 public export
 data AngleAddress
-    = CurrentAngleAddress
-        SourceSlice
-        (Maybe CommentsAndFoldingWhiteSpace)
-        AddrSpec
-        (Maybe CommentsAndFoldingWhiteSpace)
+    = CurrentAngleAddressSyntax CurrentAngleAddress
     | ObsoleteAngleAddressSyntax ObsoleteAngleAddress
 
 public export

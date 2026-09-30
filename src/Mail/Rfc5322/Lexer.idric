@@ -95,6 +95,12 @@ left_parenthesis_octet = source_octet 40
 right_parenthesis_octet : MailSourceOctet
 right_parenthesis_octet = source_octet 41
 
+left_angle_bracket_octet : MailSourceOctet
+left_angle_bracket_octet = source_octet 60
+
+right_angle_bracket_octet : MailSourceOctet
+right_angle_bracket_octet = source_octet 62
+
 exclamation_mark_octet : MailSourceOctet
 exclamation_mark_octet = source_octet 33
 
@@ -1221,3 +1227,320 @@ read_current_cfws cursor@(AtMailSource source begins octets) =
                         (OneThen first rest)
                         final_fws)
                     after
+
+
+read_optional_current_cfws : LexerCursor → (Maybe CommentsAndFoldingWhiteSpace, LexerCursor)
+read_optional_current_cfws cursor =
+    case read_current_cfws cursor of
+        Nothing => (Nothing, cursor)
+        Just (ParsedValue cfws after) => (Just cfws, after)
+
+read_current_atom : LexerCursor → Maybe (Parsed Atom)
+read_current_atom cursor@(AtMailSource source begins octets) =
+    let (before, after_before) =
+            read_optional_current_cfws cursor
+    in case read_atext_run after_before of
+           Nothing => Nothing
+           Just (ParsedValue text after_text) =>
+               let (after_cfws, after) =
+                       read_optional_current_cfws after_text
+               in Just $
+                   ParsedValue
+                       (AtomicWord
+                           (slice_between
+                               source
+                               begins
+                               (next_octet after))
+                           before
+                           (characters text)
+                           after_cfws)
+                       after
+
+read_current_dot_atom : LexerCursor → Maybe (Parsed DotAtom)
+read_current_dot_atom cursor@(AtMailSource source begins octets) =
+    let (before, after_before) =
+            read_optional_current_cfws cursor
+    in case read_dot_atom_text after_before of
+           Nothing => Nothing
+           Just (ParsedValue text after_text) =>
+               let (after_cfws, after) =
+                       read_optional_current_cfws after_text
+               in Just $
+                   ParsedValue
+                       (DottedAtom
+                           (slice_between
+                               source
+                               begins
+                               (next_octet after))
+                           before
+                           text
+                           after_cfws)
+                       after
+
+read_current_quoted_string : LexerCursor → Maybe (Parsed QuotedString)
+read_current_quoted_string
+    cursor@(AtMailSource source begins octets) =
+        let (before, after_before) =
+                read_optional_current_cfws cursor
+        in case read_quoted_string_without_cfws after_before of
+               Nothing => Nothing
+               Just (ParsedValue
+                       (Quoted
+                           inner_source
+                           inner_before
+                           opening_quote
+                           parts
+                           final_fws
+                           closing_quote
+                           inner_after)
+                       after_inner) =>
+                   let (after_cfws, after) =
+                           read_optional_current_cfws after_inner
+                   in Just $
+                       ParsedValue
+                           (Quoted
+                               (slice_between
+                                   source
+                                   begins
+                                   (next_octet after))
+                               before
+                               opening_quote
+                               parts
+                               final_fws
+                               closing_quote
+                               after_cfws)
+                           after
+
+read_current_word : LexerCursor → Maybe (Parsed Word)
+read_current_word cursor =
+    case read_current_atom cursor of
+        Just (ParsedValue atom after) =>
+            Just (ParsedValue (AtomWord atom) after)
+        Nothing =>
+            case read_current_quoted_string cursor of
+                Nothing => Nothing
+                Just (ParsedValue quoted_string after) =>
+                    Just $
+                        ParsedValue
+                            (QuotedWord quoted_string)
+                            after
+
+record WordScan where
+    constructor ScannedWords
+    words : List Word
+    after : LexerCursor
+
+scan_current_words :
+    List MailSourceOctet →
+    LexerCursor →
+    List Word →
+    WordScan
+scan_current_words [] cursor accumulated =
+    ScannedWords (reverse accumulated) cursor
+scan_current_words (_ :: fuel) cursor accumulated =
+    case read_current_word cursor of
+        Nothing =>
+            ScannedWords (reverse accumulated) cursor
+        Just (ParsedValue word after_word) =>
+            scan_current_words
+                fuel
+                after_word
+                (word :: accumulated)
+
+read_current_phrase : LexerCursor → Maybe (Parsed Phrase)
+read_current_phrase cursor@(AtMailSource source begins octets) =
+    case scan_current_words octets cursor [] of
+        ScannedWords [] after => Nothing
+        ScannedWords (first :: rest) after =>
+            Just $
+                ParsedValue
+                    (CurrentPhrase
+                        (slice_between
+                            source
+                            begins
+                            (next_octet after))
+                        (OneThen first rest))
+                    after
+
+read_current_display_name : LexerCursor → Maybe (Parsed DisplayName)
+read_current_display_name cursor@(AtMailSource source begins octets) =
+    case read_current_phrase cursor of
+        Nothing => Nothing
+        Just (ParsedValue phrase after) =>
+            Just $
+                ParsedValue
+                    (DisplayedName
+                        (slice_between
+                            source
+                            begins
+                            (next_octet after))
+                        phrase)
+                    after
+
+read_angle_address_opening : LexerCursor → Maybe (Parsed AngleAddressOpeningBracket)
+read_angle_address_opening
+    (AtMailSource source begins (octet :: rest)) =
+        if same_source_octet octet left_angle_bracket_octet
+           then
+               let ends = advance_offset begins
+               in Just $
+                    ParsedValue
+                        (OpensAngleAddress
+                            (slice_between source begins ends))
+                        (AtMailSource source ends rest)
+           else Nothing
+read_angle_address_opening _ = Nothing
+
+read_angle_address_closing : LexerCursor → Maybe (Parsed AngleAddressClosingBracket)
+read_angle_address_closing
+    (AtMailSource source begins (octet :: rest)) =
+        if same_source_octet octet right_angle_bracket_octet
+           then
+               let ends = advance_offset begins
+               in Just $
+                    ParsedValue
+                        (ClosesAngleAddress
+                            (slice_between source begins ends))
+                        (AtMailSource source ends rest)
+           else Nothing
+read_angle_address_closing _ = Nothing
+
+read_current_local_part : LexerCursor → Maybe (Parsed LocalPart)
+read_current_local_part cursor =
+    case read_current_dot_atom cursor of
+        Just (ParsedValue dot_atom after) =>
+            Just $
+                ParsedValue
+                    (DotAtomLocalPart dot_atom)
+                    after
+        Nothing =>
+            case read_current_quoted_string cursor of
+                Nothing => Nothing
+                Just (ParsedValue quoted_string after) =>
+                    Just $
+                        ParsedValue
+                            (QuotedLocalPart quoted_string)
+                            after
+
+read_current_domain : LexerCursor → Maybe (Parsed Domain)
+read_current_domain cursor =
+    case read_current_dot_atom cursor of
+        Just (ParsedValue dot_atom after) =>
+            Just $
+                ParsedValue
+                    (DotAtomDomain dot_atom)
+                    after
+        Nothing =>
+            case read_domain_literal_without_cfws cursor of
+                Nothing => Nothing
+                Just (ParsedValue literal after) =>
+                    Just $
+                        ParsedValue
+                            (LiteralDomainName literal)
+                            after
+
+read_current_addr_spec : LexerCursor → Maybe (Parsed AddrSpec)
+read_current_addr_spec cursor@(AtMailSource source begins octets) =
+    case read_current_local_part cursor of
+        Nothing => Nothing
+        Just (ParsedValue local_part after_local) =>
+            case read_addr_spec_separator after_local of
+                Nothing => Nothing
+                Just (ParsedValue separator after_separator) =>
+                    case read_current_domain after_separator of
+                        Nothing => Nothing
+                        Just (ParsedValue domain after_domain) =>
+                            Just $
+                                ParsedValue
+                                    (InternetAddressSpecification
+                                        (slice_between
+                                            source
+                                            begins
+                                            (next_octet after_domain))
+                                        local_part
+                                        separator
+                                        domain)
+                                    after_domain
+
+read_current_angle_address : LexerCursor → Maybe (Parsed AngleAddress)
+read_current_angle_address
+    cursor@(AtMailSource source begins octets) =
+        let (before, after_before) =
+                read_optional_current_cfws cursor
+        in case read_angle_address_opening after_before of
+               Nothing => Nothing
+               Just (ParsedValue opening after_opening) =>
+                   case read_current_addr_spec after_opening of
+                       Nothing => Nothing
+                       Just (ParsedValue address after_address) =>
+                           case read_angle_address_closing after_address of
+                               Nothing => Nothing
+                               Just (ParsedValue closing after_closing) =>
+                                   let (after_cfws, after) =
+                                           read_optional_current_cfws
+                                               after_closing
+                                       structure =
+                                           AngleAddressStructure
+                                               (slice_between
+                                                   source
+                                                   begins
+                                                   (next_octet after))
+                                               before
+                                               opening
+                                               address
+                                               closing
+                                               after_cfws
+                                   in Just $
+                                       ParsedValue
+                                           (CurrentAngleAddressSyntax structure)
+                                           after
+
+read_current_name_address : LexerCursor → Maybe (Parsed NameAddress)
+read_current_name_address
+    cursor@(AtMailSource source begins octets) =
+        case read_current_display_name cursor of
+            Just (ParsedValue display_name after_display_name) =>
+                case read_current_angle_address after_display_name of
+                    Nothing => Nothing
+                    Just (ParsedValue angle_address after) =>
+                        Just $
+                            ParsedValue
+                                (NamedAddress
+                                    (slice_between
+                                        source
+                                        begins
+                                        (next_octet after))
+                                    (Just display_name)
+                                    angle_address)
+                                after
+            Nothing =>
+                case read_current_angle_address cursor of
+                    Nothing => Nothing
+                    Just (ParsedValue angle_address after) =>
+                        Just $
+                            ParsedValue
+                                (NamedAddress
+                                    (slice_between
+                                        source
+                                        begins
+                                        (next_octet after))
+                                    Nothing
+                                    angle_address)
+                                after
+
+read_current_mailbox : LexerCursor → Maybe (Parsed Mailbox)
+read_current_mailbox cursor =
+    case read_current_name_address cursor of
+        Just (ParsedValue name_address after) =>
+            Just $
+                ParsedValue
+                    (NamedMailbox name_address)
+                    after
+        Nothing =>
+            case read_current_addr_spec cursor of
+                Nothing => Nothing
+                Just (ParsedValue address_spec after) =>
+                    Just $
+                        ParsedValue
+                            (BareMailbox address_spec)
+                            after
