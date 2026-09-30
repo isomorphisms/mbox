@@ -86,7 +86,15 @@ var last_entry = entry_bytes(lf.bytes, lf.messages[2])
 assert [last_entry[-1] !== b'\y0a']
 printf '%s\t%s\t%s\n' 'framing.eof-no-newline' 'PASS' 'final entry ends at EOF'
 
-printf '%s\t%s\t%s\n' 'streaming.chunk-equivalence' 'UNIMPLEMENTED' 'Grease parser is whole-buffer today'
+var whole_stream_events = frame_mbox_bytes(lf.bytes)
+for split_at in (0 ..< (len(lf.bytes) + 1)) {
+  var split_events = frame_mbox_chunks(
+    lf.bytes[0 : split_at],
+    lf.bytes[split_at :]
+  )
+  assert [split_events === whole_stream_events]
+}
+printf '%s\t%s\t%s\n' 'streaming.chunk-equivalence' 'UNIMPLEMENTED' 'exhaustive split test staged; receipt promotion waits for green CI'
 
 var hc = read_mbox('fixtures/header-corners.mbox')
 assert [len(hc.messages) === 4]
