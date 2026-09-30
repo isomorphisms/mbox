@@ -59,6 +59,17 @@ export
 same_source_octet : MailSourceOctet → MailSourceOctet → Bool
 same_source_octet (SourceOctet left) (SourceOctet right) = left ≟ right
 
+export
+same_source_octet_ascii_case_insensitive : MailSourceOctet → MailSourceOctet → Bool
+same_source_octet_ascii_case_insensitive left right =
+    ascii_fold (source_octet_code left) == ascii_fold (source_octet_code right)
+  where
+    ascii_fold : Integer → Integer
+    ascii_fold code =
+        if code >= 65 && code <= 90
+           then code + 32
+           else code
+
 source_octet_code : MailSourceOctet → Integer
 source_octet_code (SourceOctet octet) = cast octet
 
