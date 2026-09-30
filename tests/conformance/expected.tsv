@@ -1,0 +1,31 @@
+fixture.checksums	PASS	shared fixture checksum gate
+framing.empty	PASS	Agda proof generated from empty.mbox bytes
+framing.lf-ranges	PASS	Agda event proof generated from mboxo-lf.mbox
+framing.crlf-ranges	PASS	Agda event proof generated from mboxo-crlf.mbox
+framing.unescaped-from-splits	PASS	Agda event proof generated from unescaped-from-splits.mbox
+framing.content-length-ignored	PASS	LF event proof matches manifest despite Content-Length
+framing.escaped-from-preserved	PASS	LF event proof shows escaped From lines do not frame entries
+framing.empty-body	UNIMPLEMENTED	header/body parser not implemented in Agda branch
+framing.eof-no-newline	PASS	LF event proof ends final message exactly at EOF
+streaming.chunk-equivalence	UNIMPLEMENTED	chunking theorem remains a proof obligation
+headers.case-insensitive	UNIMPLEMENTED	header parser not implemented
+headers.fold	UNIMPLEMENTED	header parser not implemented
+headers.repeated	UNIMPLEMENTED	header parser not implemented
+headers.empty-value	UNIMPLEMENTED	header parser not implemented
+headers.colon-in-value	UNIMPLEMENTED	header parser not implemented
+headers.malformed-preserved	UNIMPLEMENTED	header parser not implemented
+headers.raw-byte-preservation	UNIMPLEMENTED	header parser not implemented
+addresses.bare-and-display	UNIMPLEMENTED	address parser not implemented
+addresses.quoted-comma	UNIMPLEMENTED	address parser not implemented
+addresses.folded-repeated	UNIMPLEMENTED	address parser not implemented
+selection.spec-list-positive	UNIMPLEMENTED	selection layer not implemented
+selection.body-only-negative	UNIMPLEMENTED	selection layer not implemented
+selection.wrong-header-negative	UNIMPLEMENTED	selection layer not implemented
+copy.byte-identical	UNIMPLEMENTED	copy layer not implemented
+copy.multiplicity	UNIMPLEMENTED	copy layer not implemented
+transaction.ordinary	UNIMPLEMENTED	refiler not implemented
+transaction.prepared	UNIMPLEMENTED	transaction journal not implemented
+transaction.mid-archive	UNIMPLEMENTED	transaction journal not implemented
+transaction.archive-fsynced	UNIMPLEMENTED	transaction journal not implemented
+transaction.new-source-tail	UNIMPLEMENTED	transaction journal not implemented
+transaction.mutated-prefix-refuse	UNIMPLEMENTED	transaction journal not implemented
