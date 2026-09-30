@@ -1,0 +1,393 @@
+module Mail.MboxSelection
+
+import Data.Bits
+import Data.List
+import Mail.Source
+import Mail.Mbox
+import Mail.HeaderSelection
+
+public export
+record SelectedOccurrence where
+    constructor SelectedOccurrenceAt
+    ordinal : Nat
+    whole_entry : OctetRange
+
+public export
+data SelectionScanError
+    = HeaderSectionTooLarge Nat Nat
+
+data EntryStage
+    = ReadingEnvelope
+    | ReadingHeaders
+        (List MailSourceOctet)
+        (List MailSourceOctet)
+        Nat
+    | ReadingBody Bool
+
+record ActiveEntry where
+    constructor Active
+    begins : OctetOffset
+    ordinal : Nat
+    stage : EntryStage
+
+export
+data SelectionScanner
+    = Scanner
+        StreamingFramer
+        (Maybe ActiveEntry)
+        Nat
+        (List SelectedOccurrence)
+        Nat
+
+line_feed : MailSourceOctet
+line_feed = source_octet 10
+
+carriage_return : MailSourceOctet
+carriage_return = source_octet 13
+
+is_line_feed : MailSourceOctet → Bool
+is_line_feed octet =
+    same_source_octet octet line_feed
+
+line_is_blank : List MailSourceOctet → Bool
+line_is_blank [] = True
+line_is_blank [octet] =
+    same_source_octet octet carriage_return
+line_is_blank _ = False
+
+drop_four : List a → List a
+drop_four values = drop 4 values
+
+rollback_envelope_candidate : EntryStage → EntryStage
+rollback_envelope_candidate ReadingEnvelope = ReadingEnvelope
+rollback_envelope_candidate (ReadingBody selected) =
+    ReadingBody selected
+rollback_envelope_candidate
+    (ReadingHeaders header_reversed line_reversed count) =
+        ReadingHeaders
+            (drop_four header_reversed)
+            (drop_four line_reversed)
+            (count - 4)
+
+stage_matches :
+    HeaderSearchPolicy →
+    EntryStage →
+    Bool
+stage_matches policy ReadingEnvelope = False
+stage_matches policy (ReadingBody selected) = selected
+stage_matches
+    policy
+    (ReadingHeaders header_reversed line_reversed count) =
+        header_block_matches
+            policy
+            (reverse header_reversed)
+
+finish_active :
+    HeaderSearchPolicy →
+    Bool →
+    OctetOffset →
+    Maybe ActiveEntry →
+    List SelectedOccurrence →
+    List SelectedOccurrence
+finish_active policy rollback end Nothing selected =
+    selected
+finish_active policy rollback end
+    (Just (Active begins ordinal stage))
+    selected =
+        let checked_stage =
+                if rollback
+                   then rollback_envelope_candidate stage
+                   else stage
+        in if stage_matches policy checked_stage
+              then
+                  SelectedOccurrenceAt
+                      ordinal
+                      (Octets begins end)
+                  :: selected
+              else selected
+
+handle_feed_events :
+    HeaderSearchPolicy →
+    List FramingEvent →
+    Maybe ActiveEntry →
+    Nat →
+    List SelectedOccurrence →
+    (Maybe ActiveEntry, Nat, List SelectedOccurrence)
+handle_feed_events policy [] active next_ordinal selected =
+    (active, next_ordinal, selected)
+handle_feed_events policy (MessageEnds end :: rest)
+    active next_ordinal selected =
+        handle_feed_events
+            policy
+            rest
+            Nothing
+            next_ordinal
+            (finish_active
+                policy
+                True
+                end
+                active
+                selected)
+handle_feed_events policy (EnvelopeBegins begins :: rest)
+    active next_ordinal selected =
+        handle_feed_events
+            policy
+            rest
+            (Just
+                (Active
+                    begins
+                    next_ordinal
+                    ReadingEnvelope))
+            (S next_ordinal)
+            selected
+
+handle_finish_events :
+    HeaderSearchPolicy →
+    List FramingEvent →
+    Maybe ActiveEntry →
+    List SelectedOccurrence →
+    (Maybe ActiveEntry, List SelectedOccurrence)
+handle_finish_events policy [] active selected =
+    (active, selected)
+handle_finish_events policy (MessageEnds end :: rest)
+    active selected =
+        handle_finish_events
+            policy
+            rest
+            Nothing
+            (finish_active
+                policy
+                False
+                end
+                active
+                selected)
+handle_finish_events policy (EnvelopeBegins begins :: rest)
+    active selected =
+        handle_finish_events
+            policy
+            rest
+            active
+            selected
+
+capture_header_octet :
+    HeaderSearchPolicy →
+    Nat →
+    MailSourceOctet →
+    List MailSourceOctet →
+    List MailSourceOctet →
+    Nat →
+    Either SelectionScanError EntryStage
+capture_header_octet
+    policy
+    limit
+    octet
+    header_reversed
+    line_reversed
+    count =
+        if count >= limit
+           then Left (HeaderSectionTooLarge count limit)
+           else
+               let next_header =
+                       octet :: header_reversed
+                   next_count =
+                       S count
+               in if is_line_feed octet
+                     then
+                         if line_is_blank line_reversed
+                            then
+                                Right
+                                    (ReadingBody
+                                        (header_block_matches
+                                            policy
+                                            (reverse next_header)))
+                            else
+                                Right
+                                    (ReadingHeaders
+                                        next_header
+                                        []
+                                        next_count)
+                     else
+                         Right
+                             (ReadingHeaders
+                                 next_header
+                                 (octet :: line_reversed)
+                                 next_count)
+
+feed_active_octet :
+    HeaderSearchPolicy →
+    Nat →
+    MailSourceOctet →
+    Maybe ActiveEntry →
+    Either SelectionScanError (Maybe ActiveEntry)
+feed_active_octet policy limit octet Nothing =
+    Right Nothing
+feed_active_octet policy limit octet
+    (Just (Active begins ordinal ReadingEnvelope)) =
+        if is_line_feed octet
+           then
+               Right
+                   (Just
+                       (Active
+                           begins
+                           ordinal
+                           (ReadingHeaders [] [] 0)))
+           else
+               Right
+                   (Just
+                       (Active
+                           begins
+                           ordinal
+                           ReadingEnvelope))
+feed_active_octet policy limit octet
+    (Just
+        (Active
+            begins
+            ordinal
+            (ReadingBody selected))) =
+        Right
+            (Just
+                (Active
+                    begins
+                    ordinal
+                    (ReadingBody selected)))
+feed_active_octet policy limit octet
+    (Just
+        (Active
+            begins
+            ordinal
+            (ReadingHeaders
+                header_reversed
+                line_reversed
+                count))) =
+        case capture_header_octet
+                 policy
+                 limit
+                 octet
+                 header_reversed
+                 line_reversed
+                 count of
+            Left error => Left error
+            Right next_stage =>
+                Right
+                    (Just
+                        (Active
+                            begins
+                            ordinal
+                            next_stage))
+
+export
+start_selection_scan : Nat → SelectionScanner
+start_selection_scan maximum_header_octets =
+    Scanner
+        start_streaming_framer
+        Nothing
+        0
+        []
+        maximum_header_octets
+
+export
+feed_selection_octet :
+    HeaderSearchPolicy →
+    SelectionScanner →
+    MailSourceOctet →
+    Either SelectionScanError SelectionScanner
+feed_selection_octet
+    policy
+    (Scanner framer active next_ordinal selected limit)
+    octet =
+        case feed_streaming_framer framer octet of
+            AdvancedFraming next_framer events =>
+                let (event_active, event_next_ordinal, event_selected) =
+                        handle_feed_events
+                            policy
+                            events
+                            active
+                            next_ordinal
+                            selected
+                in case feed_active_octet
+                            policy
+                            limit
+                            octet
+                            event_active of
+                       Left error => Left error
+                       Right next_active =>
+                           Right
+                               (Scanner
+                                   next_framer
+                                   next_active
+                                   event_next_ordinal
+                                   event_selected
+                                   limit)
+
+export
+feed_selection_code :
+    HeaderSearchPolicy →
+    SelectionScanner →
+    Bits8 →
+    Either SelectionScanError SelectionScanner
+feed_selection_code policy scanner code =
+    feed_selection_octet policy scanner (source_octet code)
+
+export
+feed_selection_codes :
+    HeaderSearchPolicy →
+    SelectionScanner →
+    List Bits8 →
+    Either SelectionScanError SelectionScanner
+feed_selection_codes policy scanner [] =
+    Right scanner
+feed_selection_codes policy scanner (code :: rest) =
+    case feed_selection_code policy scanner code of
+        Left error => Left error
+        Right next =>
+            feed_selection_codes
+                policy
+                next
+                rest
+
+export
+finish_selection_scan :
+    HeaderSearchPolicy →
+    SelectionScanner →
+    List SelectedOccurrence
+finish_selection_scan
+    policy
+    (Scanner framer active next_ordinal selected limit) =
+        let (finished_active, finished_selected) =
+                handle_finish_events
+                    policy
+                    (finish_streaming_framer framer)
+                    active
+                    selected
+        in reverse finished_selected
+
+export
+scan_selection_codes :
+    HeaderSearchPolicy →
+    Nat →
+    List Bits8 →
+    Either SelectionScanError (List SelectedOccurrence)
+scan_selection_codes policy maximum_header_octets codes =
+    case feed_selection_codes
+             policy
+             (start_selection_scan maximum_header_octets)
+             codes of
+        Left error => Left error
+        Right scanner =>
+            Right (finish_selection_scan policy scanner)
+
+export
+selected_ordinals :
+    List SelectedOccurrence →
+    List Nat
+selected_ordinals [] = []
+selected_ordinals (SelectedOccurrenceAt ordinal range :: rest) =
+    ordinal :: selected_ordinals rest
+
+export
+selected_ranges :
+    List SelectedOccurrence →
+    List OctetRange
+selected_ranges [] = []
+selected_ranges (SelectedOccurrenceAt ordinal range :: rest) =
+    range :: selected_ranges rest
