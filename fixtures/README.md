@@ -53,5 +53,7 @@ remain six archived entries after a successful move even when some entries
 share Message-ID or complete byte sequences. Crash/retry behavior needs its
 own transaction tests; do not pretend a set of hashes proves it safe.
 
+`fixtures/transactions/` adds crash/retry and duplicate-occurrence states for destructive refiling. Those fixtures deliberately include preexisting and selected byte-identical entries so a set/hash-based deduplication algorithm fails.
+
 `SHA256SUMS` is included so a checkout can detect accidental fixture
 normalization before language-specific tests run.
