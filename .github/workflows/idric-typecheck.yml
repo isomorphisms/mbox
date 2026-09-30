@@ -121,6 +121,22 @@ jobs:
           )
           grep -Fx 'PASS Idriç SPEC-LIST selection fixture' mbox/idric-spec-list-fixtures.out
 
+      - name: Build and run bounded-memory SPEC-LIST scanner
+        run: |
+          support="$GITHUB_WORKSPACE/idric/_"
+          idric_library_path="$support/libs/prelude/build/ttc:$support/libs/base/build/ttc:$support/libs/linear/build/ttc:$support/libs/network/build/ttc:$support/libs/contrib/build/ttc:$support/libs/test/build/ttc:"
+          (
+            cd mbox/src
+            PATH="$support/.tools/bin:$PATH" \
+            CHEZ="$support/.tools/bin/scheme" \
+            IDRIS2_PREFIX="$support/bootstrap-build" \
+            IDRIS2_PATH="$idric_library_path" \
+              "$support/build/exec/idris2" SpecListScan.idric -o idric-spec-list-scan
+            ./build/exec/idric-spec-list-scan ../fixtures/spec-list-selection.mbox |
+              tee ../idric-spec-list-scan.out
+          )
+          grep -F "$(printf 'selected\t9')" mbox/idric-spec-list-scan.out
+
       - name: Emit normalized Idriç receipt
         working-directory: mbox
         run: |
