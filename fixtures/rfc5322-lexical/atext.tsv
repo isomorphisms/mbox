@@ -1,0 +1,13 @@
+# hex octets	production	expected result	expected remaining	why
+61	atext	AtextLetter	-	lowercase ALPHA
+5a	atext	AtextLetter	-	uppercase ALPHA
+30	atext	AtextDigit	-	DIGIT
+39	atext	AtextDigit	-	DIGIT upper end
+2d	atext	AtextMark(HyphenMinus)	-	allowed atext punctuation
+5f	atext	AtextMark(LowLine)	-	allowed atext punctuation
+7e	atext	AtextMark(Tilde)	-	allowed atext punctuation
+2e	atext	NO_MATCH	2e	full stop belongs to dot-atom structure, not atext
+40	atext	NO_MATCH	40	at-sign is a higher address separator
+22	atext	NO_MATCH	22	DQUOTE begins quoted-string
+20	atext	NO_MATCH	20	SP is not atext
+c3 a9	atext	NO_MATCH	c3 a9	RFC 5322 atext is ASCII; RFC 6532 widening is separate

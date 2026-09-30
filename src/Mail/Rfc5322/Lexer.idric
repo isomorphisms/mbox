@@ -31,6 +31,11 @@ record FieldTextScan where
     values : List FieldText
     after : LexerCursor
 
+record AtextScan where
+    constructor ScannedAtext
+    values : List Atext
+    after : LexerCursor
+
 public export
 record HeaderFieldSeparator where
     constructor SeparatesHeaderFieldName
@@ -65,6 +70,66 @@ line_feed_octet = source_octet 10
 
 colon_octet : MailSourceOctet
 colon_octet = source_octet 58
+
+full_stop_octet : MailSourceOctet
+full_stop_octet = source_octet 46
+
+exclamation_mark_octet : MailSourceOctet
+exclamation_mark_octet = source_octet 33
+
+number_sign_octet : MailSourceOctet
+number_sign_octet = source_octet 35
+
+dollar_sign_octet : MailSourceOctet
+dollar_sign_octet = source_octet 36
+
+percent_sign_octet : MailSourceOctet
+percent_sign_octet = source_octet 37
+
+ampersand_octet : MailSourceOctet
+ampersand_octet = source_octet 38
+
+apostrophe_octet : MailSourceOctet
+apostrophe_octet = source_octet 39
+
+asterisk_octet : MailSourceOctet
+asterisk_octet = source_octet 42
+
+plus_sign_octet : MailSourceOctet
+plus_sign_octet = source_octet 43
+
+hyphen_minus_octet : MailSourceOctet
+hyphen_minus_octet = source_octet 45
+
+solidus_octet : MailSourceOctet
+solidus_octet = source_octet 47
+
+equals_sign_octet : MailSourceOctet
+equals_sign_octet = source_octet 61
+
+question_mark_octet : MailSourceOctet
+question_mark_octet = source_octet 63
+
+circumflex_accent_octet : MailSourceOctet
+circumflex_accent_octet = source_octet 94
+
+low_line_octet : MailSourceOctet
+low_line_octet = source_octet 95
+
+grave_accent_octet : MailSourceOctet
+grave_accent_octet = source_octet 96
+
+left_curly_bracket_octet : MailSourceOctet
+left_curly_bracket_octet = source_octet 123
+
+vertical_line_octet : MailSourceOctet
+vertical_line_octet = source_octet 124
+
+right_curly_bracket_octet : MailSourceOctet
+right_curly_bracket_octet = source_octet 125
+
+tilde_octet : MailSourceOctet
+tilde_octet = source_octet 126
 
 advance_offset : OctetOffset → OctetOffset
 advance_offset (AtOctet n) = AtOctet (n + 1)
@@ -310,3 +375,126 @@ read_obsolete_header_field_prefix cursor@(AtMailSource source begins octets) =
                                                 historical_spacing
                                                 separator)
                                             after_separator
+
+
+atext_punctuation : MailSourceOctet → Maybe AtextPunctuation
+atext_punctuation octet =
+    if same_source_octet octet exclamation_mark_octet then Just ExclamationMark
+    else if same_source_octet octet number_sign_octet then Just NumberSign
+    else if same_source_octet octet dollar_sign_octet then Just DollarSign
+    else if same_source_octet octet percent_sign_octet then Just PercentSign
+    else if same_source_octet octet ampersand_octet then Just Ampersand
+    else if same_source_octet octet apostrophe_octet then Just Apostrophe
+    else if same_source_octet octet asterisk_octet then Just Asterisk
+    else if same_source_octet octet plus_sign_octet then Just PlusSign
+    else if same_source_octet octet hyphen_minus_octet then Just HyphenMinus
+    else if same_source_octet octet solidus_octet then Just Solidus
+    else if same_source_octet octet equals_sign_octet then Just EqualsSign
+    else if same_source_octet octet question_mark_octet then Just QuestionMark
+    else if same_source_octet octet circumflex_accent_octet then Just CircumflexAccent
+    else if same_source_octet octet low_line_octet then Just LowLine
+    else if same_source_octet octet grave_accent_octet then Just GraveAccent
+    else if same_source_octet octet left_curly_bracket_octet then Just LeftCurlyBracket
+    else if same_source_octet octet vertical_line_octet then Just VerticalLine
+    else if same_source_octet octet right_curly_bracket_octet then Just RightCurlyBracket
+    else if same_source_octet octet tilde_octet then Just Tilde
+    else Nothing
+
+atext_at : SourceIdentity → OctetOffset → MailSourceOctet → Maybe Atext
+atext_at source offset octet =
+    let source_character = single_octet_slice source offset
+    in if source_octet_is_ascii_letter octet
+          then Just (AtextLetter (Alphabetic source_character))
+          else if source_octet_is_ascii_digit octet
+                  then Just (AtextDigit (DecimalDigit source_character))
+                  else case atext_punctuation octet of
+                           Nothing => Nothing
+                           Just punctuation =>
+                               Just (AtextMark source_character punctuation)
+
+scan_atext_from : SourceIdentity → OctetOffset → List MailSourceOctet → List Atext → AtextScan
+scan_atext_from source offset [] accumulated =
+    ScannedAtext
+        (reverse accumulated)
+        (AtMailSource source offset [])
+scan_atext_from source offset all_octets@(octet :: rest) accumulated =
+    case atext_at source offset octet of
+        Nothing =>
+            ScannedAtext
+                (reverse accumulated)
+                (AtMailSource source offset all_octets)
+        Just value =>
+            scan_atext_from
+                source
+                (advance_offset offset)
+                rest
+                (value :: accumulated)
+
+read_atext : LexerCursor → Maybe (Parsed Atext)
+read_atext (AtMailSource source begins (octet :: rest)) =
+    case atext_at source begins octet of
+        Nothing => Nothing
+        Just value =>
+            Just $
+                ParsedValue
+                    value
+                    (AtMailSource source (advance_offset begins) rest)
+read_atext _ = Nothing
+
+read_atext_run : LexerCursor → Maybe (Parsed AtextRun)
+read_atext_run cursor@(AtMailSource source begins octets) =
+    case scan_atext_from source begins octets [] of
+        ScannedAtext values after =>
+            case as_one_or_more values of
+                Nothing => Nothing
+                Just characters =>
+                    Just $
+                        ParsedValue
+                            (RunOfAtext
+                                (slice_between
+                                    source
+                                    begins
+                                    (next_octet after))
+                                characters)
+                            after
+
+record DotAtomTailScan where
+    constructor ScannedDotAtomTail
+    parts : List AtextRun
+    after : LexerCursor
+
+scan_dot_atom_tail : LexerCursor → List AtextRun → DotAtomTailScan
+scan_dot_atom_tail cursor@(AtMailSource source offset octets) accumulated =
+    case octets of
+        [] => ScannedDotAtomTail (reverse accumulated) cursor
+        octet :: rest =>
+            if same_source_octet octet full_stop_octet
+               then
+                   let after_dot =
+                           AtMailSource source (advance_offset offset) rest
+                   in case read_atext_run after_dot of
+                          Nothing =>
+                              ScannedDotAtomTail (reverse accumulated) cursor
+                          Just (ParsedValue part after_part) =>
+                              scan_dot_atom_tail
+                                  after_part
+                                  (part :: accumulated)
+               else ScannedDotAtomTail (reverse accumulated) cursor
+
+read_dot_atom_text : LexerCursor → Maybe (Parsed DotAtomText)
+read_dot_atom_text cursor@(AtMailSource source begins octets) =
+    case read_atext_run cursor of
+        Nothing => Nothing
+        Just (ParsedValue first_part after_first) =>
+            case scan_dot_atom_tail after_first [] of
+                ScannedDotAtomTail later_parts after =>
+                    Just $
+                        ParsedValue
+                            (DottedAtext
+                                (slice_between
+                                    source
+                                    begins
+                                    (next_octet after))
+                                first_part
+                                later_parts)
+                            after
