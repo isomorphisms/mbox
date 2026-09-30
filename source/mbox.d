@@ -670,3 +670,35 @@ unittest {
         assert(streamed[i].bodyRange == expected[i].bodyRange);
     }
 }
+
+
+unittest {
+    enum sample =
+        "From one@example.org Tue Sep 29 03:00:00 2026\n" ~
+        "From: one@example.org\n" ~
+        "Content-Length: 1\n" ~
+        "Subject: first\n\n" ~
+        "alpha\n" ~
+        ">From escaped body data\n" ~
+        "From two@example.org Tue Sep 29 03:01:00 2026\n" ~
+        "From: two@example.org\n" ~
+        "Subject: second\n\n" ~
+        "omega";
+
+    const whole = frameMboxBytes(sample);
+    assert(whole.length == 4);
+    assert(whole[0] == FrameEvent(FrameEventKind.envelopeBegins, 0));
+    assert(whole[1].kind == FrameEventKind.messageEnds);
+    assert(whole[2].kind == FrameEventKind.envelopeBegins);
+    assert(whole[1].offset == whole[2].offset);
+    assert(whole[3] == FrameEvent(
+        FrameEventKind.messageEnds,
+        sample.length
+    ));
+
+    foreach (split; 0 .. sample.length + 1)
+        assert(
+            frameMboxChunks(sample[0 .. split], sample[split .. $])
+            == whole
+        );
+}
