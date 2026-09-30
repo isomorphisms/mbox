@@ -1,0 +1,13 @@
+# hex octets	start production	expected result	expected remaining	why
+20	FWS	CurrentFWS/SingleLineFWS	-	one SP is 1*WSP
+09	FWS	CurrentFWS/SingleLineFWS	-	one HTAB is 1*WSP
+20 09	FWS	CurrentFWS/SingleLineFWS	-	multiple WSP without folding
+0d 0a 20	FWS	CurrentFWS/FoldedFWS	-	zero leading WSP, CRLF, then required WSP
+20 0d 0a 09	FWS	CurrentFWS/FoldedFWS	-	leading WSP plus fold plus trailing WSP
+20 09 0d 0a 20 09	FWS	CurrentFWS/FoldedFWS	-	multiple WSP on both sides of fold
+0d 0a	FWS	NO_MATCH	0d 0a	CRLF without following WSP is not FWS
+20 0d 0a	FWS	CurrentFWS/SingleLineFWS	0d 0a	failed fold must not consume CRLF; leading SP is still valid FWS
+0a 20	FWS	NO_MATCH	0a 20	bare LF is not current RFC 5322 CRLF
+20 0a 20	FWS	CurrentFWS/SingleLineFWS	0a 20	SP is valid; bare LF begins the remaining input
+0d 0a 09 58	FWS	CurrentFWS/FoldedFWS	58	fold consumes only its trailing WSP
+20 3a	FWS	CurrentFWS/SingleLineFWS	3a	colon is not WSP and remains for the higher grammar
