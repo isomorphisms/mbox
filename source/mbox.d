@@ -1,5 +1,7 @@
 module mbox;
 
+import std.stdio : File;
+
 /*
  * Byte-preserving mboxo + RFC-header core.
  *
@@ -8,13 +10,13 @@ module mbox;
  * source buffer.
  */
 
-alias ByteOffset = size_t;
+alias ByteOffset = ulong;
 
 struct ByteRange {
     ByteOffset start;
     ByteOffset end;
 
-    @property size_t length() const pure nothrow @safe {
+    @property ByteOffset length() const pure nothrow @safe {
         return end - start;
     }
 }
@@ -38,6 +40,17 @@ struct MessageView {
 struct Address {
     string displayName;
     string addrSpec;
+}
+
+struct MboxRecord {
+    ByteRange envelopeRange;
+    ByteRange messageRange;
+    ByteRange headerRange;
+    ByteRange bodyRange;
+
+    @property ByteRange wholeRange() const pure nothrow @safe {
+        return ByteRange(envelopeRange.start, messageRange.end);
+    }
 }
 
 private bool startsWithAt(scope const(char)[] bytes, size_t at, scope const(char)[] needle)
@@ -231,6 +244,73 @@ MessageView[] parseMbox(scope const(char)[] bytes) @safe
     }
 
     return out;
+}
+
+HeaderField[] parseHeaderBlock(scope const(char)[] bytes) @safe
+{
+    size_t headerEnd;
+    size_t bodyBegin;
+    return parseHeaders(bytes, 0, bytes.length, headerEnd, bodyBegin);
+}
+
+// Stream an mboxo file without materializing the mailbox or message bodies.
+// The caller controls locking.  Every physical line beginning "From " is a
+// separator, matching the v0 contract.
+void scanMbox(ref File source, scope void delegate(in MboxRecord) emit)
+{
+    enum ScanState {
+        beforeFirst,
+        headers,
+        body,
+    }
+
+    source.seek(0);
+
+    ScanState state = ScanState.beforeFirst;
+    MboxRecord record;
+    ByteOffset position;
+    ByteOffset lineStart;
+
+    void finish(ByteOffset end)
+    {
+        record.messageRange.end = end;
+        if (state == ScanState.headers) {
+            record.headerRange.end = end;
+            record.bodyRange.start = end;
+        }
+        record.bodyRange.end = end;
+        emit(record);
+    }
+
+    while (true) {
+        const line = source.readln();
+        if (line.length == 0)
+            break;
+
+        const next = position + line.length;
+
+        if (startsWithAt(line, 0, "From ")) {
+            if (state != ScanState.beforeFirst)
+                finish(lineStart);
+
+            record = MboxRecord.init;
+            record.envelopeRange = ByteRange(lineStart, next);
+            record.messageRange.start = next;
+            record.headerRange.start = next;
+            state = ScanState.headers;
+        } else if (state == ScanState.headers &&
+                   (line == "\n" || line == "\r\n")) {
+            record.headerRange.end = next;
+            record.bodyRange.start = next;
+            state = ScanState.body;
+        }
+
+        position = next;
+        lineStart = next;
+    }
+
+    if (state != ScanState.beforeFirst)
+        finish(position);
 }
 
 string[] headerValues(scope const MessageView message, scope const(char)[] name) @safe
