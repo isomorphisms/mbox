@@ -314,6 +314,36 @@ private bool consumeArchivedOccurrence(
     return true;
 }
 
+private size_t uncoveredCount(
+    scope const SelectedMessage[] selected,
+    ref size_t[string] archived
+)
+{
+    size_t uncovered;
+    auto remaining = archived.dup;
+
+    foreach (message; selected)
+        if (!consumeArchivedOccurrence(remaining, message.digest))
+            ++uncovered;
+
+    return uncovered;
+}
+
+private void requireAppendBoundary(ref File archive)
+{
+    const length = archive.size;
+    if (length == 0)
+        return;
+
+    archive.seek(-1, SEEK_END);
+    ubyte[1] tail;
+    const got = archive.rawRead(tail[]);
+    enforce(got.length == 1,
+        "mbox-file: cannot read archive tail before append");
+    enforce(tail[0] == '\n',
+        "mbox-file: archive does not end at a line boundary; refusing to append");
+}
+
 private SelectedMessage[] selectMessages(R)(
     ref File source,
     ref bool[string] wantedHeaders,
@@ -341,16 +371,12 @@ private void printPlan(
     ref size_t[string] archived
 )
 {
-    size_t alreadyArchived;
-    auto remaining = archived.dup;
-
-    foreach (message; selected)
-        if (consumeArchivedOccurrence(remaining, message.digest))
-            ++alreadyArchived;
+    const wouldAppend = uncoveredCount(selected, archived);
+    const alreadyArchived = selected.length - wouldAppend;
 
     stdout.writeln("matched: ", selected.length);
     stdout.writeln("already archived: ", alreadyArchived);
-    stdout.writeln("would append: ", selected.length - alreadyArchived);
+    stdout.writeln("would append: ", wouldAppend);
     stdout.writeln("would remove from source: ", selected.length);
 }
 
@@ -496,6 +522,9 @@ private int runMove(
 
     auto archived = entryDigestCounts(archive);
     printPlan(selected, archived);
+
+    if (uncoveredCount(selected, archived) != 0)
+        requireAppendBoundary(archive);
 
     auto remainingArchived = archived.dup;
     archive.seek(0, SEEK_END);
@@ -688,4 +717,20 @@ unittest {
     archived[first] = 1;
     assert(consumeArchivedOccurrence(archived, first));
     assert(!consumeArchivedOccurrence(archived, first));
+
+    SelectedMessage[] equalSelected = [
+        SelectedMessage(all[0], first),
+        SelectedMessage(all[0], first),
+    ];
+
+    size_t[string] emptyArchive;
+    assert(uncoveredCount(equalSelected, emptyArchive) == 2);
+
+    size_t[string] oneArchived;
+    oneArchived[first] = 1;
+    assert(uncoveredCount(equalSelected, oneArchived) == 1);
+
+    size_t[string] twoArchived;
+    twoArchived[first] = 2;
+    assert(uncoveredCount(equalSelected, twoArchived) == 0);
 }
