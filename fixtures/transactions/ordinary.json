@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "scenario": "ordinary",
+  "observed_state": {
+    "source": "common/source-before.mbox",
+    "archive": "common/archive-before.mbox",
+    "journal": null
+  },
+  "expected": {
+    "action": "move",
+    "source": "common/expected-source.mbox",
+    "archive": "common/expected-archive.mbox"
+  },
+  "rule": "preexisting byte-identical archive content does not suppress source occurrences"
+}

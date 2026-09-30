@@ -1,0 +1,13 @@
+From preserve@example.org Tue Sep 29 06:00:00 2026
+From:  odd-spacing@example.org
+To:	user@example.org
+Subject: keep raw folding
+	first continuation
+  second continuation  
+Message-ID: <preserve@example.org>
+X-Weird: a  b	c
+
+line with trailing spaces   
+>From escaped body line
+	leading body tab
+

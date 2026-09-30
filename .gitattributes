@@ -1,0 +1,2 @@
+fixtures/*.mbox -text
+fixtures/transactions/common/*.mbox -text

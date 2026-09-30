@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "transaction_id": "tx-duplicate-recovery-001",
+  "source_snapshot": {
+    "bytes": 956,
+    "sha256": "d1d9cd2ab56876eb334fb1656c180833071b9930b29afbd64ffee7bd94d4fc3f"
+  },
+  "selected": [
+    {
+      "ordinal": 0,
+      "source_range": [
+        185,
+        362
+      ],
+      "bytes": 177,
+      "sha256": "874e9a783963ece8ccb2a15cd381e093a9ee0a61de68c46d8543d21265e2dc7d"
+    },
+    {
+      "ordinal": 1,
+      "source_range": [
+        362,
+        569
+      ],
+      "bytes": 207,
+      "sha256": "7f9af876891b3f609e685ed414f8314569181ec5092de091109cadb19b8afee2"
+    },
+    {
+      "ordinal": 2,
+      "source_range": [
+        569,
+        776
+      ],
+      "bytes": 207,
+      "sha256": "7f9af876891b3f609e685ed414f8314569181ec5092de091109cadb19b8afee2"
+    }
+  ],
+  "archive_baseline": {
+    "bytes": 395,
+    "sha256": "98a931ba87d1a0a40cb5a2de4eb6858bdfecc7d232e2867552e54d636669ce53"
+  },
+  "phase": "appending",
+  "archive_append": {
+    "completed_occurrences": 1,
+    "range": [
+      395,
+      572
+    ],
+    "bytes": 177,
+    "sha256": "874e9a783963ece8ccb2a15cd381e093a9ee0a61de68c46d8543d21265e2dc7d",
+    "fsynced": false
+  },
+  "observed_state": {
+    "source": "common/source-before.mbox",
+    "archive": "common/archive-mid-one.mbox"
+  },
+  "expected": {
+    "action": "recover",
+    "source": "common/expected-source.mbox",
+    "archive": "common/expected-archive.mbox"
+  }
+}

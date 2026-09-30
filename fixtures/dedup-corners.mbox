@@ -1,0 +1,42 @@
+From dedup1@example.org Tue Sep 29 05:00:00 2026
+From: author@example.org
+To: user@example.org
+Message-ID: <reused@example.org>
+Subject: first body
+
+alpha
+From dedup2@example.org Tue Sep 29 05:01:00 2026
+From: author@example.org
+To: user@example.org
+Message-ID: <reused@example.org>
+Subject: second body
+
+beta
+From dedup3@example.org Tue Sep 29 05:02:00 2026
+From: same@example.org
+To: user@example.org
+Message-ID: <identical@example.org>
+Subject: identical RFC bytes
+
+same body
+From different-envelope@example.org Tue Sep 29 05:03:00 2026
+From: same@example.org
+To: user@example.org
+Message-ID: <identical@example.org>
+Subject: identical RFC bytes
+
+same body
+From exact@example.org Tue Sep 29 05:04:00 2026
+From: exact@example.org
+To: user@example.org
+Message-ID: <exact-duplicate@example.org>
+Subject: exact duplicate entry
+
+same exact body
+From exact@example.org Tue Sep 29 05:04:00 2026
+From: exact@example.org
+To: user@example.org
+Message-ID: <exact-duplicate@example.org>
+Subject: exact duplicate entry
+
+same exact body
