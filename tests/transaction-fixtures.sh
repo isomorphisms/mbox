@@ -3,9 +3,33 @@ set -eu
 
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 f="$root/fixtures/transactions/common"
-tmp="${TMPDIR:-/tmp}/mbox-transaction-fixtures.$$"
+tmp="${TMPDIR:-/tmp}/mbox-transaction-fixtures.$"
+
+hash_file() {
+    if command -v sha256 >/dev/null 2>&1; then
+        sha256 -q "$1"
+    else
+        sha256sum "$1" | awk '{print $1}'
+    fi
+}
 
 mkdir "$tmp"
+
+while read -r expected path; do
+    test -n "$expected" || continue
+    actual=$(hash_file "$root/$path")
+    test "$actual" = "$expected"
+done < "$root/fixtures/transactions/SHA256SUMS"
+
+# Recovery-state files are semantic oracles, not merely prose.
+grep -q '"phase": "prepared"' "$root/fixtures/transactions/prepared.json"
+grep -q '"phase": "appending"' "$root/fixtures/transactions/mid-archive.json"
+grep -q '"completed_occurrences": 1' "$root/fixtures/transactions/mid-archive.json"
+grep -q '"phase": "archive_fsynced"' "$root/fixtures/transactions/archive-fsynced.json"
+grep -q '"action": "finish_source_preserve_tail"' "$root/fixtures/transactions/new-source-tail.json"
+grep -q '"starts_at": 956' "$root/fixtures/transactions/new-source-tail.json"
+grep -q '"action": "refuse"' "$root/fixtures/transactions/source-prefix-mutated.json"
+
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 
 cat "$f/keeper-before.mbox" "$f/selected.mbox" "$f/keeper-after.mbox" > "$tmp/source-before"
