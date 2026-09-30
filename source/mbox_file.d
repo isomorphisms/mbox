@@ -13,7 +13,6 @@ import std.file :
     exists,
     getAttributes,
     getAvailableDiskSpace,
-    getSize,
     remove,
     rename,
     setAttributes;
@@ -208,17 +207,38 @@ private void syncFile(ref File file, string description)
         "mbox-file: fsync failed for " ~ description);
 }
 
-private void probeRewrite(string sourcePath)
+private void requireSameOwnerGroup(
+    ref File source,
+    ref File replacement
+)
+{
+    stat_t oldStat;
+    stat_t newStat;
+    enforce(fstat(source.fileno, &oldStat) == 0,
+        "mbox-file: cannot stat source mailbox");
+    enforce(fstat(replacement.fileno, &newStat) == 0,
+        "mbox-file: cannot stat replacement mailbox");
+    enforce(
+        oldStat.st_uid == newStat.st_uid &&
+        oldStat.st_gid == newStat.st_gid,
+        "mbox-file: adjacent replacement would change source owner/group; refusing"
+    );
+}
+
+private void probeRewrite(ref File source, string sourcePath)
 {
     const probePath =
         sourcePath ~ ".mbox-file-probe." ~ to!string(thisProcessID);
 
     auto probe = createExclusive(probePath);
-    probe.close();
     scope(exit) {
+        if (probe.isOpen)
+            probe.close();
         if (exists(probePath))
             remove(probePath);
     }
+
+    requireSameOwnerGroup(source, probe);
 }
 
 private bool recordMatches(R)(
@@ -315,6 +335,7 @@ private void rewriteSource(
         sourcePath ~ ".mbox-file-rewrite." ~ to!string(thisProcessID);
 
     auto temp = createExclusive(tempPath);
+    requireSameOwnerGroup(source, temp);
     bool keepTemp = true;
     scope(exit) {
         try {
@@ -363,6 +384,7 @@ private int runDry(
 {
     auto matcher = regex(pattern, ignoreCase ? "i" : "");
     auto source = File(sourcePath, "rb");
+    const initialSourceSize = source.size;
 
     auto selected = selectMessages(source, wantedHeaders, matcher);
 
@@ -372,6 +394,8 @@ private int runDry(
         archived = digestIndex(archive);
     }
 
+    enforce(source.size == initialSourceSize,
+        "mbox-file: source mailbox changed during dry run; rerun");
     printPlan(selected, archived);
     stdout.writeln("dry run: no mailbox bytes changed");
     return 0;
@@ -416,7 +440,7 @@ private int runMove(
     enforce(available >= sourceSize + rewriteHeadroom,
         "mbox-file: not enough free space beside source mailbox; need source size + 64 MiB");
 
-    probeRewrite(sourcePath);
+    probeRewrite(source, sourcePath);
 
     auto archive = File(archivePath, "a+b");
     bool archiveLocked;
