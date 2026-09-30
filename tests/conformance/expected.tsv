@@ -7,7 +7,7 @@ framing.content-length-ignored	PASS	lying Content-Length did not change framing
 framing.escaped-from-preserved	PASS	>From and >>From preserved
 framing.empty-body	PASS	second LF message body empty
 framing.eof-no-newline	PASS	final entry ends at EOF
-streaming.chunk-equivalence	UNIMPLEMENTED	Grease parser is whole-buffer today
+streaming.chunk-equivalence	PASS	all 569 two-chunk splits match whole-buffer framing events
 headers.case-insensitive	PASS	SUBJECT lookup matches mixed-case source field
 headers.fold	PASS	folded subject unfolds to manifest value
 headers.repeated	PASS	repeated To and Cc retained
