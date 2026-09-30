@@ -77,6 +77,12 @@ full_stop_octet = source_octet 46
 at_sign_octet : MailSourceOctet
 at_sign_octet = source_octet 64
 
+double_quote_octet : MailSourceOctet
+double_quote_octet = source_octet 34
+
+reverse_solidus_octet : MailSourceOctet
+reverse_solidus_octet = source_octet 92
+
 exclamation_mark_octet : MailSourceOctet
 exclamation_mark_octet = source_octet 33
 
@@ -588,3 +594,157 @@ read_dot_atom_addr_spec cursor@(AtMailSource source begins octets) =
                                 ParsedValue
                                     (DotAtomAddress whole address)
                                     after_domain
+
+
+read_double_quote : LexerCursor → Maybe (Parsed DQuote)
+read_double_quote (AtMailSource source begins (octet :: rest)) =
+    if same_source_octet octet double_quote_octet
+       then
+           let ends = advance_offset begins
+           in Just $
+                ParsedValue
+                    (DoubleQuote (slice_between source begins ends))
+                    (AtMailSource source ends rest)
+       else Nothing
+read_double_quote _ = Nothing
+
+quoted_text_at : SourceIdentity → OctetOffset → MailSourceOctet → Maybe QuotedText
+quoted_text_at source offset octet =
+    if source_octet_is_ascii_visible octet
+       && not (same_source_octet octet double_quote_octet)
+       && not (same_source_octet octet reverse_solidus_octet)
+       then Just $
+            CurrentQuotedText (single_octet_slice source offset)
+       else Nothing
+
+read_current_quoted_pair : LexerCursor → Maybe (Parsed QuotedPair)
+read_current_quoted_pair
+    (AtMailSource source begins (escape_octet :: payload_octet :: rest)) =
+        if same_source_octet escape_octet reverse_solidus_octet
+           then
+               let payload_offset = advance_offset begins
+                   ends = advance_offset payload_offset
+                   escape_source =
+                       single_octet_slice source begins
+                   payload_source =
+                       single_octet_slice source payload_offset
+                   whole =
+                       slice_between source begins ends
+                   payload =
+                       case white_space_at source payload_offset payload_octet of
+                           Just white_space =>
+                               Just (QuotedWhiteSpace white_space)
+                           Nothing =>
+                               if source_octet_is_ascii_visible payload_octet
+                                  then Just $
+                                       QuotedVisibleCharacter
+                                           (Visible payload_source)
+                                  else Nothing
+               in case payload of
+                      Nothing => Nothing
+                      Just quoted_payload =>
+                          Just $
+                              ParsedValue
+                                  (CurrentQuotedPairSyntax $
+                                      CurrentQuotedPairStructure
+                                          whole
+                                          (QuotedPairReverseSolidus escape_source)
+                                          quoted_payload)
+                                  (AtMailSource source ends rest)
+           else Nothing
+read_current_quoted_pair _ = Nothing
+
+read_current_quoted_content : LexerCursor → Maybe (Parsed QuotedContent)
+read_current_quoted_content
+    cursor@(AtMailSource source begins (octet :: rest)) =
+        case quoted_text_at source begins octet of
+            Just quoted_text =>
+                Just $
+                    ParsedValue
+                        (QuotedCharacters quoted_text)
+                        (AtMailSource source (advance_offset begins) rest)
+            Nothing =>
+                case read_current_quoted_pair cursor of
+                    Nothing => Nothing
+                    Just (ParsedValue quoted_pair after) =>
+                        Just $
+                            ParsedValue
+                                (QuotedCharacterPair quoted_pair)
+                                after
+read_current_quoted_content _ = Nothing
+
+record QuotedStringScan where
+    constructor ScannedQuotedString
+    parts : List QuotedStringPart
+    final_folding_white_space : Maybe FoldingWhiteSpace
+    after : LexerCursor
+
+scan_current_quoted_string :
+    List MailSourceOctet →
+    LexerCursor →
+    List QuotedStringPart →
+    QuotedStringScan
+scan_current_quoted_string [] cursor accumulated =
+    ScannedQuotedString (reverse accumulated) Nothing cursor
+scan_current_quoted_string (_ :: fuel) cursor accumulated =
+    case read_current_folding_white_space cursor of
+        Just (ParsedValue folding_white_space after_fws) =>
+            case read_current_quoted_content after_fws of
+                Nothing =>
+                    ScannedQuotedString
+                        (reverse accumulated)
+                        (Just folding_white_space)
+                        after_fws
+                Just (ParsedValue content after_content) =>
+                    scan_current_quoted_string
+                        fuel
+                        after_content
+                        (QuotedPart (Just folding_white_space) content
+                         :: accumulated)
+        Nothing =>
+            case read_current_quoted_content cursor of
+                Nothing =>
+                    ScannedQuotedString
+                        (reverse accumulated)
+                        Nothing
+                        cursor
+                Just (ParsedValue content after_content) =>
+                    scan_current_quoted_string
+                        fuel
+                        after_content
+                        (QuotedPart Nothing content :: accumulated)
+
+-- Current quoted-string without the optional outer CFWS.  The internal grammar
+-- is complete for current RFC 5322: qtext, quoted-pair, and FWS are retained as
+-- distinct semantic values.  Outer comments/CFWS are a separate parser layer.
+read_quoted_string_without_cfws : LexerCursor → Maybe (Parsed QuotedString)
+read_quoted_string_without_cfws
+    cursor@(AtMailSource source begins octets) =
+        case read_double_quote cursor of
+            Nothing => Nothing
+            Just (ParsedValue opening_quote after_opening) =>
+                case scan_current_quoted_string
+                         octets
+                         after_opening
+                         [] of
+                    ScannedQuotedString
+                        parts
+                        final_fws
+                        before_closing =>
+                            case read_double_quote before_closing of
+                                Nothing => Nothing
+                                Just (ParsedValue closing_quote after_closing) =>
+                                    Just $
+                                        ParsedValue
+                                            (Quoted
+                                                (slice_between
+                                                    source
+                                                    begins
+                                                    (next_octet after_closing))
+                                                Nothing
+                                                opening_quote
+                                                parts
+                                                final_fws
+                                                closing_quote
+                                                Nothing)
+                                            after_closing

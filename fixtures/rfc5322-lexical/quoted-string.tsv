@@ -1,0 +1,12 @@
+# hex octets	production	expected result	expected remaining	note
+22 22	quoted-string without CFWS	QuotedString(empty)	-	empty quoted string is valid
+22 78 22	quoted-string without CFWS	QuotedString(qtext x)	-	one qtext character
+22 6c 6f 63 61 6c 20 70 61 72 74 22	quoted-string without CFWS	QuotedString(local FWS part)	-	space is FWS, not qtext
+22 61 5c 22 62 22	quoted-string without CFWS	QuotedString(a quoted-pair-quote b)	-	escaped quote is content, not delimiter
+22 61 5c 5c 62 22	quoted-string without CFWS	QuotedString(a quoted-pair-backslash b)	-	escaped reverse solidus
+22 61 0d 0a 20 62 22	quoted-string without CFWS	QuotedString(a folded-FWS b)	-	RFC folding inside quoted string
+22 20 22	quoted-string without CFWS	QuotedString(final-FWS)	-	FWS before closing quote is retained separately
+22 61 22 58	quoted-string without CFWS	QuotedString(a)	58	parser stops after closing DQUOTE
+61 22	quoted-string without CFWS	NO_MATCH	61 22	must begin with DQUOTE
+22 61	quoted-string without CFWS	NO_MATCH	22 61	unterminated quoted string
+22 5c 0a 22	quoted-string without CFWS	NO_MATCH	22 5c 0a 22	bare LF after reverse solidus is obsolete quoted-pair, not current syntax

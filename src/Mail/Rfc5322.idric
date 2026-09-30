@@ -15,8 +15,25 @@ record ObsoleteQuotedPair where
     source : SourceSlice
 
 public export
+record QuotedPairEscape where
+    constructor QuotedPairReverseSolidus
+    source : SourceSlice
+
+public export
+data QuotedPairPayload
+    = QuotedVisibleCharacter VisibleCharacter
+    | QuotedWhiteSpace WhiteSpace
+
+public export
+record CurrentQuotedPair where
+    constructor CurrentQuotedPairStructure
+    source : SourceSlice
+    escape : QuotedPairEscape
+    payload : QuotedPairPayload
+
+public export
 data QuotedPair
-    = CurrentQuotedPair SourceSlice
+    = CurrentQuotedPairSyntax CurrentQuotedPair
     | ObsoleteQuotedPairSyntax ObsoleteQuotedPair
 
 -- 3.2.2 FWS, ctext, ccontent, comment, CFWS
@@ -184,8 +201,10 @@ record QuotedString where
     constructor Quoted
     source : SourceSlice
     before : Maybe CommentsAndFoldingWhiteSpace
+    opening_quote : DQuote
     contents : List QuotedStringPart
     final_folding_white_space : Maybe FoldingWhiteSpace
+    closing_quote : DQuote
     after : Maybe CommentsAndFoldingWhiteSpace
 
 -- 3.2.5 word, phrase, unstructured
