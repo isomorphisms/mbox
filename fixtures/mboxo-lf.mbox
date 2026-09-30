@@ -1,0 +1,24 @@
+From one@example.org Tue Sep 29 03:00:00 2026
+From: one@example.org
+To: user@example.org
+Message-ID: <mboxo-one@example.org>
+Content-Length: 1
+Subject: content length lies
+
+alpha
+>From this is escaped body data
+>>From this also stays body data
+omega
+From two@example.org Tue Sep 29 03:01:00 2026
+From: two@example.org
+To: user@example.org
+Message-ID: <mboxo-two@example.org>
+Subject: empty body
+
+From three@example.org Tue Sep 29 03:02:00 2026
+From: three@example.org
+To: user@example.org
+Message-ID: <mboxo-three@example.org>
+Subject: no final newline
+
+last byte is e

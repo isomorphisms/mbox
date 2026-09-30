@@ -1,0 +1,35 @@
+From keeper-before@example.org Wed Sep 30 02:00:00 2026
+From: keeper-before@example.org
+To: user@example.org
+Message-ID: <keeper-before@example.org>
+Subject: keep before
+
+keeper before
+From selected-a@example.org Wed Sep 30 02:01:00 2026
+From: selected-a@example.org
+To: SPEC-LIST@example.org
+Message-ID: <selected-a@example.org>
+Subject: selected A changed
+
+selected A
+From selected-duplicate@example.org Wed Sep 30 02:02:00 2026
+From: duplicate@example.org
+To: SPEC-LIST@example.org
+Message-ID: <duplicate@example.org>
+Subject: duplicate occurrence
+
+identical duplicate body
+From selected-duplicate@example.org Wed Sep 30 02:02:00 2026
+From: duplicate@example.org
+To: SPEC-LIST@example.org
+Message-ID: <duplicate@example.org>
+Subject: duplicate occurrence
+
+identical duplicate body
+From keeper-after@example.org Wed Sep 30 02:04:00 2026
+From: keeper-after@example.org
+To: user@example.org
+Message-ID: <keeper-after@example.org>
+Subject: keep after
+
+keeper after

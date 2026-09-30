@@ -1,0 +1,15 @@
+From crlf1@example.org Tue Sep 29 07:00:00 2026
+From: crlf1@example.org
+To: user@example.org
+Message-ID: <crlf-one@example.org>
+Subject: CRLF one
+
+body one
+>From escaped
+From crlf2@example.org Tue Sep 29 07:01:00 2026
+From: crlf2@example.org
+To: user@example.org
+Message-ID: <crlf-two@example.org>
+Subject: CRLF two
+
+

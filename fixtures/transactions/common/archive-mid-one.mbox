@@ -1,0 +1,21 @@
+From archive-old@example.org Tue Sep 29 23:00:00 2026
+From: archive-old@example.org
+To: user@example.org
+Message-ID: <archive-old@example.org>
+Subject: old archive entry
+
+old archive body
+From selected-duplicate@example.org Wed Sep 30 02:02:00 2026
+From: duplicate@example.org
+To: SPEC-LIST@example.org
+Message-ID: <duplicate@example.org>
+Subject: duplicate occurrence
+
+identical duplicate body
+From selected-a@example.org Wed Sep 30 02:01:00 2026
+From: selected-a@example.org
+To: SPEC-LIST@example.org
+Message-ID: <selected-a@example.org>
+Subject: selected A
+
+selected A
