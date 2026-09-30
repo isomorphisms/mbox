@@ -213,6 +213,20 @@ public export
 frame_codes : List Bits8 → List FramingEvent
 frame_codes codes = frame_octets (map source_octet codes)
 
+public export
+frame_codes_chunks :
+    List Bits8 →
+    List Bits8 →
+    List FramingEvent
+frame_codes_chunks first second =
+    case feed_octets initial_framer (map source_octet first) of
+        Fed first_state first_events =>
+            case feed_octets first_state (map source_octet second) of
+                Fed second_state second_events =>
+                    first_events
+                    ++ second_events
+                    ++ finish_framing second_state
+
 -- Header parsing descends through Mail.Rfc5322.  The container layer only
 -- establishes exact source ranges and storage-specific tolerances.
 
