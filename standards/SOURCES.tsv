@@ -1,6 +1,8 @@
 # file	canonical URL	role
 rfc2119.txt	https://www.rfc-editor.org/rfc/rfc2119.txt	BCP 14 requirement words
 rfc8174.txt	https://www.rfc-editor.org/rfc/rfc8174.txt	BCP 14 uppercase/lowercase clarification
+rfc3629.txt	https://www.rfc-editor.org/rfc/rfc3629.txt	UTF-8
+rfc5198.txt	https://www.rfc-editor.org/rfc/rfc5198.txt	Unicode format for network interchange
 rfc5234.txt	https://www.rfc-editor.org/rfc/rfc5234.txt	ABNF
 rfc7405.txt	https://www.rfc-editor.org/rfc/rfc7405.txt	ABNF case-sensitive strings
 rfc4155.txt	https://www.rfc-editor.org/rfc/rfc4155.txt	application/mbox
