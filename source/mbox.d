@@ -541,6 +541,8 @@ unittest {
     MboxRecord[] streamed;
     scanMbox(file, (in MboxRecord record) {
         streamed ~= record;
+        if (streamed.length == 1)
+            file.seek(0); // scanner must recover from callback inspection seeks
     });
 
     assert(streamed.length == expected.length);
