@@ -215,3 +215,39 @@ frame_codes codes = frame_octets (map source_octet codes)
 
 -- Header parsing descends through Mail.Rfc5322.  The container layer only
 -- establishes exact source ranges and storage-specific tolerances.
+
+
+-- Opaque streaming facade over the same framer used by frame_octets.
+-- Callers can carry the continuation state without depending on its internal
+-- separator-prefix representation.
+export
+data StreamingFramer = StreamFramer FramerState
+
+public export
+record StreamingFramingStep where
+    constructor AdvancedFraming
+    continuation : StreamingFramer
+    events : List FramingEvent
+
+export
+start_streaming_framer : StreamingFramer
+start_streaming_framer = StreamFramer initial_framer
+
+export
+feed_streaming_framer :
+    StreamingFramer →
+    MailSourceOctet →
+    StreamingFramingStep
+feed_streaming_framer (StreamFramer state) octet =
+    case feed_octet state octet of
+        Fed next_state events =>
+            AdvancedFraming
+                (StreamFramer next_state)
+                events
+
+export
+finish_streaming_framer :
+    StreamingFramer →
+    List FramingEvent
+finish_streaming_framer (StreamFramer state) =
+    finish_framing state
