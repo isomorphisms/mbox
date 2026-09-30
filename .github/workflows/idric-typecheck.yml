@@ -159,3 +159,4 @@ jobs:
           EOF
           cat tests/conformance/receipt.tsv
           sh tests/conformance/check-receipt.sh tests/conformance/cases.tsv tests/conformance/receipt.tsv
+          cmp tests/conformance/expected.tsv tests/conformance/receipt.tsv
