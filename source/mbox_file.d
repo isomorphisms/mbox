@@ -241,15 +241,6 @@ private bool recordMatches(R)(
     return false;
 }
 
-private MboxRecord[] records(ref File mailbox)
-{
-    MboxRecord[] result;
-    scanMbox(mailbox, (in MboxRecord record) {
-        result ~= record;
-    });
-    return result;
-}
-
 private MboxRecord[] selectMessages(R)(
     ref File source,
     ref bool[string] wantedHeaders,
@@ -257,14 +248,11 @@ private MboxRecord[] selectMessages(R)(
 )
 {
     MboxRecord[] selected;
-    const all = records(source);
 
-    foreach (record; all) {
-        if (!recordMatches(source, record, wantedHeaders, matcher))
-            continue;
-
-        selected ~= record;
-    }
+    scanMbox(source, (in MboxRecord record) {
+        if (recordMatches(source, record, wantedHeaders, matcher))
+            selected ~= record;
+    });
 
     return selected;
 }
@@ -549,7 +537,7 @@ unittest {
     auto selected = selectMessages(source, wantedHeaders, matcher);
 
     assert(selected.length == 3);
-    assert(selected[0].record.envelopeRange.start == 0);
+    assert(selected[0].envelopeRange.start == 0);
 
     MboxRecord oversized;
     oversized.messageRange.start = 123;
