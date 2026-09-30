@@ -1,0 +1,15 @@
+#!/bin/sh
+set -eu
+
+exec "$(dirname "$0")/mbox-file" \
+    --source /var/mail/isomorphisms \
+    --archive "$HOME/Mail/spec-list" \
+    --header From \
+    --header Sender \
+    --header Reply-To \
+    --header To \
+    --header Cc \
+    --header Subject \
+    --pattern 'SPEC-LIST' \
+    --ignore-case \
+    "$@"
