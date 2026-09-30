@@ -292,13 +292,26 @@ private MboxRecord[] records(ref File mailbox)
     return result;
 }
 
-private bool[string] digestIndex(ref File archive)
+private size_t[string] entryDigestCounts(ref File archive)
 {
-    bool[string] result;
+    size_t[string] result;
     const all = records(archive);
     foreach (record; all)
-        result[sha256Range(archive, record.messageRange)] = true;
+        ++result[sha256Range(archive, record.wholeRange)];
     return result;
+}
+
+private bool consumeArchivedOccurrence(
+    ref size_t[string] remaining,
+    string digest
+)
+{
+    auto count = digest in remaining;
+    if (count is null || *count == 0)
+        return false;
+
+    --*count;
+    return true;
 }
 
 private SelectedMessage[] selectMessages(R)(
@@ -316,7 +329,7 @@ private SelectedMessage[] selectMessages(R)(
 
         selected ~= SelectedMessage(
             record,
-            sha256Range(source, record.messageRange)
+            sha256Range(source, record.wholeRange)
         );
     }
 
@@ -325,19 +338,15 @@ private SelectedMessage[] selectMessages(R)(
 
 private void printPlan(
     scope const SelectedMessage[] selected,
-    ref bool[string] archived
+    ref size_t[string] archived
 )
 {
     size_t alreadyArchived;
-    bool[string] seen = archived.dup;
+    auto remaining = archived.dup;
 
-    foreach (message; selected) {
-        if (message.digest in seen) {
+    foreach (message; selected)
+        if (consumeArchivedOccurrence(remaining, message.digest))
             ++alreadyArchived;
-        } else {
-            seen[message.digest] = true;
-        }
-    }
 
     stdout.writeln("matched: ", selected.length);
     stdout.writeln("already archived: ", alreadyArchived);
@@ -356,7 +365,6 @@ private void rewriteSource(
         sourcePath ~ ".mbox-file-rewrite." ~ to!string(thisProcessID());
 
     auto temp = createExclusive(tempPath);
-    requireSameOwnerGroup(source, temp);
     bool keepTemp = true;
     scope(exit) {
         try {
@@ -372,6 +380,8 @@ private void rewriteSource(
             }
         }
     }
+
+    requireSameOwnerGroup(source, temp);
 
     ByteOffset cursor;
     foreach (message; selected) {
@@ -410,10 +420,10 @@ private int runDry(
 
     auto selected = selectMessages(source, wantedHeaders, matcher);
 
-    bool[string] archived;
+    size_t[string] archived;
     if (exists(archivePath)) {
         auto archive = File(archivePath, "rb");
-        archived = digestIndex(archive);
+        archived = entryDigestCounts(archive);
     }
 
     enforce(source.size == initialSourceSize,
@@ -484,17 +494,17 @@ private int runMove(
     enforce(!sameFile(source, archive),
         "mbox-file: source and archive are the same file");
 
-    auto archived = digestIndex(archive);
+    auto archived = entryDigestCounts(archive);
     printPlan(selected, archived);
 
+    auto remainingArchived = archived.dup;
     archive.seek(0, SEEK_END);
     foreach (message; selected) {
-        if (message.digest in archived)
+        if (consumeArchivedOccurrence(remainingArchived, message.digest))
             continue;
 
         const whole = message.record.wholeRange;
         copyRange(source, archive, whole.start, whole.end);
-        archived[message.digest] = true;
     }
 
     // Source deletion is not allowed until every needed archive append is
@@ -664,13 +674,18 @@ unittest {
     const all = records(source);
     assert(all.length == 3);
 
-    const first = sha256Range(source, all[0].messageRange);
-    const second = sha256Range(source, all[1].messageRange);
-    const third = sha256Range(source, all[2].messageRange);
+    const first = sha256Range(source, all[0].wholeRange);
+    const second = sha256Range(source, all[1].wholeRange);
+    const third = sha256Range(source, all[2].wholeRange);
 
-    // Reused Message-ID values do not collapse different RFC messages.
+    // Reused Message-ID values do not collapse distinct entries.
     assert(first != second);
+    assert(first != third);
 
-    // The mbox From_ separator is deliberately excluded from the digest.
-    assert(first == third);
+    // Retry accounting is multiplicity-aware: one archived occurrence covers
+    // only one of two equal selected entries.
+    size_t[string] archived;
+    archived[first] = 1;
+    assert(consumeArchivedOccurrence(archived, first));
+    assert(!consumeArchivedOccurrence(archived, first));
 }
