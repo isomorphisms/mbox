@@ -1,0 +1,67 @@
+name: D conformance status
+
+on:
+  push:
+    branches:
+      - D
+    paths:
+      - "source/**"
+      - "bin/**"
+      - "fixtures/**"
+      - "tests/**"
+      - "LANGUAGE.md"
+      - ".github/workflows/d-conformance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  receipt:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Verify shared fixture bytes first
+        run: sh tests/shared-fixtures.sh
+
+      - name: Emit normalized D receipt
+        run: |
+          cat > tests/conformance/receipt.tsv <<'EOF'
+          fixture.checksums	PASS	shared fixture checksum gate
+          framing.empty	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain is blocked at 22b41425cb478754346637db87ebd42e43b42863
+          framing.lf-ranges	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
+          framing.crlf-ranges	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
+          framing.unescaped-from-splits	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
+          framing.content-length-ignored	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
+          framing.escaped-from-preserved	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
+          framing.empty-body	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
+          framing.eof-no-newline	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
+          streaming.chunk-equivalence	UNIMPLEMENTED	arbitrary-chunk feed API not implemented in D branch
+          headers.case-insensitive	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
+          headers.fold	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
+          headers.repeated	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
+          headers.empty-value	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
+          headers.colon-in-value	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
+          headers.malformed-preserved	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
+          headers.raw-byte-preservation	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
+          addresses.bare-and-display	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
+          addresses.quoted-comma	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
+          addresses.folded-repeated	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
+          selection.spec-list-positive	BLOCKED	D filer exists; approved Ick/NetBSD toolchain blocked
+          selection.body-only-negative	BLOCKED	D filer exists; approved Ick/NetBSD toolchain blocked
+          selection.wrong-header-negative	BLOCKED	D filer exists; approved Ick/NetBSD toolchain blocked
+          copy.byte-identical	BLOCKED	D byte-slice copy exists; approved Ick/NetBSD toolchain blocked
+          copy.multiplicity	BLOCKED	D one-for-one copy exists; approved Ick/NetBSD toolchain blocked
+          transaction.ordinary	BLOCKED	D fresh-run move exists; approved Ick/NetBSD toolchain blocked
+          transaction.prepared	UNIMPLEMENTED	no durable transaction journal
+          transaction.mid-archive	UNIMPLEMENTED	no durable transaction journal
+          transaction.archive-fsynced	UNIMPLEMENTED	no durable transaction journal
+          transaction.new-source-tail	UNIMPLEMENTED	no durable transaction journal
+          transaction.mutated-prefix-refuse	UNIMPLEMENTED	no durable transaction journal
+          EOF
+          cat tests/conformance/receipt.tsv
+          sh tests/conformance/check-receipt.sh tests/conformance/cases.tsv tests/conformance/receipt.tsv
