@@ -1,4 +1,4 @@
-name: Agda
+name: Agda conformance
 
 on:
   push:
@@ -7,21 +7,82 @@ on:
   pull_request:
     paths:
       - "src/**/*.agda"
+      - "test/**"
+      - "fixtures/**"
+      - "tests/**"
       - ".github/workflows/agda.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   typecheck:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out exact revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+
+      - name: Verify shared fixture bytes first
+        run: sh tests/shared-fixtures.sh
+
       - name: Install Agda
         run: |
           sudo apt-get update
           sudo apt-get install -y agda agda-stdlib
-      - name: Typecheck
+
+      - name: Prepare writable Agda standard library
         run: |
           STDLIB_FILE="$(dpkg -L agda-stdlib | grep '/Data/List.agda$' | head -n 1)"
           STDLIB="$(dirname "$(dirname "$STDLIB_FILE")")"
           WORK_STDLIB="$RUNNER_TEMP/agda-stdlib"
           cp -a "$STDLIB" "$WORK_STDLIB"
-          agda -i src -i "$WORK_STDLIB" src/Mbox.agda
+          echo "AGDA_STDLIB=$WORK_STDLIB" >> "$GITHUB_ENV"
+
+      - name: Typecheck mailbox model
+        run: agda -i src -i "$AGDA_STDLIB" src/Mbox.agda
+
+      - name: Generate proofs from exact shared fixture bytes
+        run: |
+          python3 test/generate_fixture_conformance.py > test/FixtureConformance.agda
+          agda -i src -i test -i "$AGDA_STDLIB" test/FixtureConformance.agda
+
+      - name: Emit normalized conformance receipt
+        run: |
+          cat > tests/conformance/receipt.tsv <<'EOF'
+          fixture.checksums	PASS	shared fixture checksum gate
+          framing.empty	PASS	Agda proof generated from empty.mbox bytes
+          framing.lf-ranges	PASS	Agda event proof generated from mboxo-lf.mbox
+          framing.crlf-ranges	PASS	Agda event proof generated from mboxo-crlf.mbox
+          framing.unescaped-from-splits	PASS	Agda event proof generated from unescaped-from-splits.mbox
+          framing.content-length-ignored	PASS	LF event proof matches manifest despite Content-Length
+          framing.escaped-from-preserved	PASS	LF event proof shows escaped From lines do not frame entries
+          framing.empty-body	UNIMPLEMENTED	header/body parser not implemented in Agda branch
+          framing.eof-no-newline	PASS	LF event proof ends final message exactly at EOF
+          streaming.chunk-equivalence	UNIMPLEMENTED	chunking theorem remains a proof obligation
+          headers.case-insensitive	UNIMPLEMENTED	header parser not implemented
+          headers.fold	UNIMPLEMENTED	header parser not implemented
+          headers.repeated	UNIMPLEMENTED	header parser not implemented
+          headers.empty-value	UNIMPLEMENTED	header parser not implemented
+          headers.colon-in-value	UNIMPLEMENTED	header parser not implemented
+          headers.malformed-preserved	UNIMPLEMENTED	header parser not implemented
+          headers.raw-byte-preservation	UNIMPLEMENTED	header parser not implemented
+          addresses.bare-and-display	UNIMPLEMENTED	address parser not implemented
+          addresses.quoted-comma	UNIMPLEMENTED	address parser not implemented
+          addresses.folded-repeated	UNIMPLEMENTED	address parser not implemented
+          selection.spec-list-positive	UNIMPLEMENTED	selection layer not implemented
+          selection.body-only-negative	UNIMPLEMENTED	selection layer not implemented
+          selection.wrong-header-negative	UNIMPLEMENTED	selection layer not implemented
+          copy.byte-identical	UNIMPLEMENTED	copy layer not implemented
+          copy.multiplicity	UNIMPLEMENTED	copy layer not implemented
+          transaction.ordinary	UNIMPLEMENTED	refiler not implemented
+          transaction.prepared	UNIMPLEMENTED	transaction journal not implemented
+          transaction.mid-archive	UNIMPLEMENTED	transaction journal not implemented
+          transaction.archive-fsynced	UNIMPLEMENTED	transaction journal not implemented
+          transaction.new-source-tail	UNIMPLEMENTED	transaction journal not implemented
+          transaction.mutated-prefix-refuse	UNIMPLEMENTED	transaction journal not implemented
+          EOF
+          cat tests/conformance/receipt.tsv
+          sh tests/conformance/check-receipt.sh tests/conformance/cases.tsv tests/conformance/receipt.tsv
