@@ -1,0 +1,21 @@
+From selected-a@example.org Wed Sep 30 02:01:00 2026
+From: selected-a@example.org
+To: SPEC-LIST@example.org
+Message-ID: <selected-a@example.org>
+Subject: selected A
+
+selected A
+From selected-duplicate@example.org Wed Sep 30 02:02:00 2026
+From: duplicate@example.org
+To: SPEC-LIST@example.org
+Message-ID: <duplicate@example.org>
+Subject: duplicate occurrence
+
+identical duplicate body
+From selected-duplicate@example.org Wed Sep 30 02:02:00 2026
+From: duplicate@example.org
+To: SPEC-LIST@example.org
+Message-ID: <duplicate@example.org>
+Subject: duplicate occurrence
+
+identical duplicate body

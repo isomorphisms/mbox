@@ -1,0 +1,35 @@
+From headers1@example.org Tue Sep 29 02:00:00 2026
+fRoM: Mixed Case <mixed@example.org>
+To: "Doe, Jane" <jane@example.org>,
+	John <john@example.net>
+To: second@example.com
+Cc: first-cc@example.org
+Cc: second-cc@example.org
+X-Empty:
+X-Colon: left:right:still-value
+Subject: folded
+  with spaces
+	and tab
+Message-ID: <header-folds@example.org>
+
+body
+From headers2@example.org Tue Sep 29 02:01:00 2026
+From: author@example.org
+Broken header line without colon
+To: still@example.org
+Message-ID: <malformed-header@example.org>
+Subject: malformed but preservable
+
+body two
+From headers3@example.org Tue Sep 29 02:02:00 2026
+From: author@example.org
+Subject:
+Message-ID: <empty-subject@example.org>
+
+From headers4@example.org Tue Sep 29 02:03:00 2026
+From: author@example.org
+Subject: tabs and trailing spaces   
+Message-ID: <trailing-space@example.org>
+X-Raw: keep	these	bytes
+
+body four   

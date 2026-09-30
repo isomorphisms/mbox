@@ -1,0 +1,144 @@
+{
+  "version": 1,
+  "fixtures": {
+    "empty.mbox": {
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "message_count": 0,
+      "purpose": ["empty mailbox"]
+    },
+    "spec-list-selection.mbox": {
+      "sha256": "abe09382813f9c5770fe1a6736d92def93132ad7e5df5330c467be745146853a",
+      "message_count": 14,
+      "selection_rule": {
+        "pattern": "SPEC-LIST",
+        "ignore_case": true,
+        "headers": ["From", "Sender", "Reply-To", "To", "Cc", "Subject"]
+      },
+      "selected_message_ids": [
+        "<from-match@example.org>",
+        "<sender-match@example.org>",
+        "<reply-fold-match@example.org>",
+        "<to-match@example.org>",
+        "<cc-match@example.org>",
+        "<subject-match@example.org>",
+        "<case-match@example.org>",
+        "<folded-subject@example.org>",
+        "<repeated-to@example.org>"
+      ],
+      "not_selected_message_ids": [
+        "<body-only@example.org>",
+        "<x-list-only@example.org>",
+        "<delivered-only@example.org>",
+        "<space-not-hyphen@example.org>",
+        "<wrong-header@example.org>"
+      ]
+    },
+    "header-corners.mbox": {
+      "sha256": "d528da14f0c78f99f4559b1563390607c686a9eb31d377edc13eb12c02e7fa99",
+      "message_count": 4,
+      "expectations": {
+        "<header-folds@example.org>": {
+          "header_names_in_order": ["fRoM", "To", "To", "Cc", "Cc", "X-Empty", "X-Colon", "Subject", "Message-ID"],
+          "unfolded_subject": "folded with spaces and tab",
+          "x_empty_value": "",
+          "x_colon_value": "left:right:still-value"
+        },
+        "<malformed-header@example.org>": {
+          "defect_raw_line": "Broken header line without colon\n",
+          "must_preserve_defect_bytes": true
+        },
+        "<empty-subject@example.org>": {
+          "subject_value": "",
+          "empty_body": true
+        },
+        "<trailing-space@example.org>": {
+          "raw_bytes_must_be_preserved": true
+        }
+      }
+    },
+    "mboxo-lf.mbox": {
+      "sha256": "0268cad65b1856c72c74e4f7953ef9d9ef8e2b676f54b9d22ae8516721f148b2",
+      "message_count": 3,
+      "line_endings": "LF",
+      "ranges": [
+        {"envelope_range": [0, 46], "message_range": [46, 250], "whole_entry_range": [0, 250]},
+        {"envelope_range": [250, 296], "message_range": [296, 396], "whole_entry_range": [250, 396]},
+        {"envelope_range": [396, 444], "message_range": [444, 568], "whole_entry_range": [396, 568]}
+      ],
+      "expectations": [
+        "Content-Length does not affect framing",
+        ">From and >>From body lines remain ordinary body data",
+        "second message has an empty body",
+        "third message ends at EOF without a final newline"
+      ]
+    },
+    "mboxo-crlf.mbox": {
+      "sha256": "29249d0f99ff369ca67b9c5464aade6b196bd7528f4c9926da3d37d87962c3b5",
+      "message_count": 2,
+      "line_endings": "CRLF",
+      "ranges": [
+        {"envelope_range": [0, 49], "message_range": [49, 178], "whole_entry_range": [0, 178]},
+        {"envelope_range": [178, 227], "message_range": [227, 333], "whole_entry_range": [178, 333]}
+      ]
+    },
+    "unescaped-from-splits.mbox": {
+      "sha256": "87f027761ec9130d282cc5711fc5b181d9869dd3b8deda0a77157aa6cedab840",
+      "message_count": 2,
+      "ranges": [
+        {"envelope_range": [0, 48], "message_range": [48, 157], "whole_entry_range": [0, 157]},
+        {"envelope_range": [157, 208], "message_range": [208, 275], "whole_entry_range": [157, 275]}
+      ],
+      "expectations": [
+        "the body-looking line beginning exactly 'From ' starts a new mboxo entry",
+        "mboxo framing does not validate whether that envelope line looks like a real sender/date"
+      ]
+    },
+    "address-view.mbox": {
+      "sha256": "e9c9e90f6012259860d14591a692f0a18c07e8ade3d57c230694c053b1701aa3",
+      "message_count": 2,
+      "addresses": {
+        "<addresses-one@example.org>": {
+          "To": [
+            {"display": "", "addr_spec": "bare@example.org"},
+            {"display": "Display Name", "addr_spec": "display@example.net"}
+          ],
+          "Cc": [
+            {"display": "Doe, Jane", "addr_spec": "jane@example.com"},
+            {"display": "John", "addr_spec": "john@EXAMPLE.COM"}
+          ]
+        },
+        "<addresses-two@example.org>": {
+          "To": [
+            {"display": "", "addr_spec": "first@example.org"},
+            {"display": "", "addr_spec": "second@example.org"},
+            {"display": "Comma, Name", "addr_spec": "third@example.org"}
+          ],
+          "Cc": [
+            {"display": "", "addr_spec": "fourth@example.org"},
+            {"display": "Fifth Person", "addr_spec": "fifth@example.org"}
+          ]
+        }
+      }
+    },
+    "dedup-corners.mbox": {
+      "sha256": "ecab9a15c4cd4be2b27b006224abf05f3ee6fd4a9d2c208a915dcb1179f020f8",
+      "message_count": 6,
+      "expectations": [
+        "entries 1 and 2 reuse one Message-ID but have different RFC message bytes",
+        "entries 3 and 4 have different envelope lines but byte-identical RFC message bytes",
+        "entries 5 and 6 are byte-identical whole mbox entries",
+        "Message-ID alone is not a safe deduplication key",
+        "refiling into an empty archive must preserve all six entries, including multiplicity"
+      ],
+      "distinct_rfc_message_byte_sequences": 4,
+      "distinct_whole_entry_byte_sequences": 5
+    },
+    "copy-preservation.mbox": {
+      "sha256": "4ee72a15ab5407a2585fa37e283561fd3d5e3ed3a1c9886133ea316908e67e11",
+      "message_count": 1,
+      "expectations": [
+        "raw header spacing, tabs, folding, trailing spaces, escaped >From body line, leading body tab, and blank lines survive byte-for-byte copy"
+      ]
+    }
+  }
+}
