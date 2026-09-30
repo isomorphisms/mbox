@@ -1,0 +1,31 @@
+fixture.checksums	PASS	shared fixture checksum gate
+framing.empty	PASS	empty.mbox has zero entries
+framing.lf-ranges	PASS	manifest ranges
+framing.crlf-ranges	PASS	manifest CRLF ranges
+framing.unescaped-from-splits	PASS	line-leading From splits entry
+framing.content-length-ignored	PASS	lying Content-Length did not change framing
+framing.escaped-from-preserved	PASS	>From and >>From preserved
+framing.empty-body	PASS	second LF message body empty
+framing.eof-no-newline	PASS	final entry ends at EOF
+streaming.chunk-equivalence	UNIMPLEMENTED	Grease parser is whole-buffer today
+headers.case-insensitive	PASS	SUBJECT lookup matches mixed-case source field
+headers.fold	PASS	folded subject unfolds to manifest value
+headers.repeated	PASS	repeated To and Cc retained
+headers.empty-value	PASS	empty field value retained
+headers.colon-in-value	PASS	colon remains in field value
+headers.malformed-preserved	PASS	defective raw line retained
+headers.raw-byte-preservation	PASS	single entry view equals exact fixture bytes
+addresses.bare-and-display	PASS	bare and display-name mailboxes
+addresses.quoted-comma	PASS	quoted display comma
+addresses.folded-repeated	PASS	folded and repeated address fields
+selection.spec-list-positive	PASS	nine selected messages match manifest
+selection.body-only-negative	PASS	body-only SPEC-LIST does not select
+selection.wrong-header-negative	PASS	unsearched headers do not select
+copy.byte-identical	PASS	unchanged entry copies as exact byte slice
+copy.multiplicity	PASS	six entries copied in order including exact duplicates
+transaction.ordinary	UNIMPLEMENTED	no destructive refiler in Grease yet
+transaction.prepared	UNIMPLEMENTED	no transaction journal in Grease yet
+transaction.mid-archive	UNIMPLEMENTED	no transaction journal in Grease yet
+transaction.archive-fsynced	UNIMPLEMENTED	no transaction journal in Grease yet
+transaction.new-source-tail	UNIMPLEMENTED	no transaction journal in Grease yet
+transaction.mutated-prefix-refuse	UNIMPLEMENTED	no transaction journal in Grease yet
