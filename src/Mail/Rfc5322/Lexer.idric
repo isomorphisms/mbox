@@ -748,3 +748,61 @@ read_quoted_string_without_cfws
                                                 closing_quote
                                                 Nothing)
                                             after_closing
+
+
+read_current_local_part_without_cfws : LexerCursor → Maybe (Parsed LocalPart)
+read_current_local_part_without_cfws cursor =
+    case read_dot_atom_without_cfws cursor of
+        Just (ParsedValue dot_atom after) =>
+            Just $
+                ParsedValue
+                    (DotAtomLocalPart dot_atom)
+                    after
+        Nothing =>
+            case read_quoted_string_without_cfws cursor of
+                Nothing => Nothing
+                Just (ParsedValue quoted_string after) =>
+                    Just $
+                        ParsedValue
+                            (QuotedLocalPart quoted_string)
+                            after
+
+read_current_dot_atom_domain_without_cfws : LexerCursor → Maybe (Parsed Domain)
+read_current_dot_atom_domain_without_cfws cursor =
+    case read_dot_atom_without_cfws cursor of
+        Nothing => Nothing
+        Just (ParsedValue dot_atom after) =>
+            Just $
+                ParsedValue
+                    (DotAtomDomain dot_atom)
+                    after
+
+-- Current addr-spec with every RFC 5322 local-part alternative implemented so
+-- far (dot-atom or quoted-string) and the dot-atom domain branch.  Domain
+-- literals and obsolete domains are intentionally separate recognizers.
+read_addr_spec_with_dot_atom_domain : LexerCursor → Maybe (Parsed AddrSpec)
+read_addr_spec_with_dot_atom_domain
+    cursor@(AtMailSource source begins octets) =
+        case read_current_local_part_without_cfws cursor of
+            Nothing => Nothing
+            Just (ParsedValue local_part after_local) =>
+                case read_addr_spec_separator after_local of
+                    Nothing => Nothing
+                    Just (ParsedValue separator after_separator) =>
+                        case read_current_dot_atom_domain_without_cfws
+                                 after_separator of
+                            Nothing => Nothing
+                            Just (ParsedValue domain after_domain) =>
+                                let whole =
+                                        slice_between
+                                            source
+                                            begins
+                                            (next_octet after_domain)
+                                in Just $
+                                    ParsedValue
+                                        (InternetAddressSpecification
+                                            whole
+                                            local_part
+                                            separator
+                                            domain)
+                                        after_domain

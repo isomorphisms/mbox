@@ -1,0 +1,7 @@
+# hex octets	production	expected result	expected remaining	note
+61 40 62	addr-spec with dot-atom domain	AddrSpec(DotAtomLocalPart a AddressAtSign DotAtomDomain b)	-	dot-atom local part
+22 6c 6f 63 61 6c 20 70 61 72 74 22 40 65 78 61 6d 70 6c 65 2e 6f 72 67	addr-spec with dot-atom domain	AddrSpec(QuotedLocalPart local-part AddressAtSign DotAtomDomain example.org)	-	quoted-string local part from RFC 5322 3.4.1
+22 61 5c 22 62 22 40 65 78 61 6d 70 6c 65 2e 6f 72 67	addr-spec with dot-atom domain	AddrSpec(QuotedLocalPart escaped-quote AddressAtSign DotAtomDomain example.org)	-	quoted-pair survives inside local-part
+22 22 40 65 78 61 6d 70 6c 65 2e 6f 72 67	addr-spec with dot-atom domain	AddrSpec(QuotedLocalPart empty AddressAtSign DotAtomDomain example.org)	-	empty quoted-string is syntactically permitted
+75 73 65 72 40 5b 31 32 37 2e 30 2e 30 2e 31 5d	addr-spec with dot-atom domain	NO_MATCH_SUBSET	75 73 65 72 40 5b 31 32 37 2e 30 2e 30 2e 31 5d	domain-literal is valid RFC 5322 and remains a separate domain branch
+22 75 6e 63 6c 6f 73 65 64 40 65 78 61 6d 70 6c 65 2e 6f 72 67	addr-spec with dot-atom domain	NO_MATCH	22 75 6e 63 6c 6f 73 65 64 40 65 78 61 6d 70 6c 65 2e 6f 72 67	unterminated quoted local part
