@@ -12,10 +12,16 @@ fixtures = [
     ("split", "unescaped-from-splits.mbox"),
 ]
 
+def byte_expr(value):
+    out = "zero"
+    for _ in range(value):
+        out = f"suc ({out})"
+    return out
+
 def agda_list(values):
     if not values:
         return "[]"
-    return " ∷ ".join(str(x) for x in values) + " ∷ []"
+    return " ∷ ".join(byte_expr(x) for x in values) + " ∷ []"
 
 def expected_events(name):
     info = manifest["fixtures"][name]
@@ -32,6 +38,7 @@ def expected_events(name):
 
 print("""module FixtureConformance where
 
+open import Data.Fin using (zero; suc)
 open import Data.List using (List; []; _∷_; _++_)
 open import Relation.Binary.PropositionalEquality using (_≡_; refl)
 open import Mbox
