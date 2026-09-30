@@ -29,9 +29,33 @@ jobs:
           ref: "51e3892d4de59943e42e65c60a9814aba792c5d4"
           path: idric
 
+      - name: Restore pinned Idriç build
+        id: idric-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            idric/_/.tools
+            idric/_/bootstrap-build
+            idric/_/build
+            idric/_/libs/prelude/build
+            idric/_/libs/base/build
+            idric/_/libs/contrib/build
+            idric/_/libs/linear/build
+            idric/_/libs/network/build
+            idric/_/libs/test/build
+          key: idric-linux-51e3892d4de59943e42e65c60a9814aba792c5d4-v1
+
       - name: Bootstrap Idriç
+        if: steps.idric-cache.outputs.cache-hit != 'true'
         working-directory: idric
         run: ./edric bootstrap
+
+      - name: Verify restored or built compiler
+        working-directory: idric
+        run: |
+          test -x _/build/exec/idris2
+          test -d _/bootstrap-build
+          test -d _/libs/base/build
 
       - name: Typecheck RFC-shaped mail modules
         run: |
