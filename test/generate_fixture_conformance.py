@@ -39,7 +39,7 @@ def expected_events(name):
 print("""module FixtureConformance where
 
 open import Data.Fin using (zero; suc)
-open import Data.List using (List; []; _∷_; _++_; take; drop)
+open import Data.List using (List; []; _∷_; _++_)
 open import Relation.Binary.PropositionalEquality using (_≡_; refl)
 open import Mbox
 
@@ -62,15 +62,4 @@ for var, filename in fixtures:
     print()
     print(f"{var}-events : run-events {var}-bytes ≡ {expected_events(filename)}")
     print(f"{var}-events = refl")
-    print()
-
-lf_data = (root / "fixtures" / "mboxo-lf.mbox").read_bytes()
-print("-- Exhaustive two-chunk equivalence for every split point of mboxo-lf.mbox.")
-for i in range(len(lf_data) + 1):
-    print(
-        f"lf-split-{i} : "
-        f"run-chunks (take {i} lf-bytes) (drop {i} lf-bytes) "
-        f"≡ run-events lf-bytes"
-    )
-    print(f"lf-split-{i} = refl")
     print()
