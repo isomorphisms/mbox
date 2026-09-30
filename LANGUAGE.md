@@ -34,3 +34,25 @@ The executable source stays inside syntax implemented by the current Grease
 line. Grease's existing readable boolean aliases remain available where command
 boolean syntax is needed; this parser does not pretend that experimental
 spellings such as `←` or `≟` are already current Grease semantics.
+
+
+## Shared conformance
+
+The Grease branch now consumes `tests/conformance/cases.tsv` and the exact
+shared byte fixtures on `main`.
+
+The first normalized receipt passed 24 of 31 cases:
+
+- framing over the whole-buffer parser;
+- header case/folding/repetition/malformed preservation;
+- address views;
+- SPEC-LIST positive and negative selection cases;
+- byte-identical extraction and duplicate multiplicity.
+
+It reports `UNIMPLEMENTED` for streaming chunk-equivalence and the six
+destructive transaction/recovery cases.
+
+The first conformance run also exposed a real Grease/YSH source bug:
+`parse_addresses` declared `token` twice in one function scope. Current YSH
+rejects that; the branch now uses distinct names and the conformance run is
+green.
