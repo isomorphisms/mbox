@@ -91,7 +91,10 @@ jobs:
           python3 mbox/test/generate_idric_fixture_conformance.py > mbox/src/MboxFixtureRuntime.idric
           (
             cd mbox/src
-            ../../idric/_/build/exec/idris2 MboxFixtureRuntime.idric -o idric-fixtures
+            PATH="../../idric/_/.tools/bin:$PATH" \
+            IDRIS2_PREFIX="../../idric/_/bootstrap-build" \
+            IDRIS2_PATH="../../idric/_/libs/prelude/build/ttc:../../idric/_/libs/base/build/ttc:../../idric/_/libs/linear/build/ttc:../../idric/_/libs/network/build/ttc:../../idric/_/libs/contrib/build/ttc:../../idric/_/libs/test/build/ttc:" \
+              ../../idric/_/build/exec/idris2 MboxFixtureRuntime.idric -o idric-fixtures
             ./build/exec/idric-fixtures | tee ../idric-fixtures.out
           )
           grep -Fx 'PASS Idriç shared framing fixtures' mbox/idric-fixtures.out
