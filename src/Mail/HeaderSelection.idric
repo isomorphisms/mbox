@@ -1,0 +1,294 @@
+module Mail.HeaderSelection
+
+import Data.Bits
+import Data.List
+import Mail.Source
+
+-- These are ordinary RFC field roles that a caller may choose to search.
+-- The type deliberately does not call them SPEC-LIST fields.
+public export
+data SearchHeader
+    = FromHeader
+    | SenderHeader
+    | ReplyToHeader
+    | ToHeader
+    | CcHeader
+    | SubjectHeader
+
+public export
+record HeaderSearchPolicy where
+    constructor SearchHeaderValues
+    headers : List SearchHeader
+    needle : OneOrMore MailSourceOctet
+
+public export
+record SearchableHeaderValue where
+    constructor SearchableValue
+    header : SearchHeader
+    unfolded_value : List MailSourceOctet
+
+record PhysicalLine where
+    constructor Line
+    content : List MailSourceOctet
+    remaining : List MailSourceOctet
+
+data HeaderSplit
+    = NotAField
+    | FieldParts (List MailSourceOctet) (List MailSourceOctet)
+
+line_feed : MailSourceOctet
+line_feed = source_octet 10
+
+carriage_return : MailSourceOctet
+carriage_return = source_octet 13
+
+space : MailSourceOctet
+space = source_octet 32
+
+horizontal_tab : MailSourceOctet
+horizontal_tab = source_octet 9
+
+colon : MailSourceOctet
+colon = source_octet 58
+
+is_white_space : MailSourceOctet → Bool
+is_white_space octet =
+    same_source_octet octet space
+    || same_source_octet octet horizontal_tab
+
+strip_final_carriage_return : List MailSourceOctet → List MailSourceOctet
+strip_final_carriage_return octets =
+    case reverse octets of
+        [] => []
+        final :: reversed_prefix =>
+            if same_source_octet final carriage_return
+               then reverse reversed_prefix
+               else octets
+
+read_physical_line_from :
+    List MailSourceOctet →
+    List MailSourceOctet →
+    PhysicalLine
+read_physical_line_from accumulated [] =
+    Line
+        (strip_final_carriage_return (reverse accumulated))
+        []
+read_physical_line_from accumulated (octet :: rest) =
+    if same_source_octet octet line_feed
+       then
+           Line
+               (strip_final_carriage_return (reverse accumulated))
+               rest
+       else
+           read_physical_line_from
+               (octet :: accumulated)
+               rest
+
+read_physical_line : List MailSourceOctet → PhysicalLine
+read_physical_line = read_physical_line_from []
+
+trim_left_white_space : List MailSourceOctet → List MailSourceOctet
+trim_left_white_space [] = []
+trim_left_white_space all@(octet :: rest) =
+    if is_white_space octet
+       then trim_left_white_space rest
+       else all
+
+starts_with_white_space : List MailSourceOctet → Bool
+starts_with_white_space [] = False
+starts_with_white_space (octet :: _) = is_white_space octet
+
+split_header_field_from :
+    List MailSourceOctet →
+    List MailSourceOctet →
+    HeaderSplit
+split_header_field_from accumulated [] = NotAField
+split_header_field_from accumulated (octet :: rest) =
+    if same_source_octet octet colon
+       then
+           FieldParts
+               (reverse accumulated)
+               (trim_left_white_space rest)
+       else
+           split_header_field_from
+               (octet :: accumulated)
+               rest
+
+split_header_field : List MailSourceOctet → HeaderSplit
+split_header_field = split_header_field_from []
+
+same_ascii_case_insensitive :
+    List MailSourceOctet →
+    List MailSourceOctet →
+    Bool
+same_ascii_case_insensitive [] [] = True
+same_ascii_case_insensitive [] (_ :: _) = False
+same_ascii_case_insensitive (_ :: _) [] = False
+same_ascii_case_insensitive (left :: left_rest) (right :: right_rest) =
+    same_source_octet_ascii_case_insensitive left right
+    && same_ascii_case_insensitive left_rest right_rest
+
+field_name : SearchHeader → List MailSourceOctet
+field_name FromHeader =
+    map source_octet [70, 114, 111, 109]
+field_name SenderHeader =
+    map source_octet [83, 101, 110, 100, 101, 114]
+field_name ReplyToHeader =
+    map source_octet [82, 101, 112, 108, 121, 45, 84, 111]
+field_name ToHeader =
+    map source_octet [84, 111]
+field_name CcHeader =
+    map source_octet [67, 99]
+field_name SubjectHeader =
+    map source_octet [83, 117, 98, 106, 101, 99, 116]
+
+header_from_name : List MailSourceOctet → Maybe SearchHeader
+header_from_name name =
+    if same_ascii_case_insensitive name (field_name FromHeader)
+       then Just FromHeader
+       else if same_ascii_case_insensitive name (field_name SenderHeader)
+               then Just SenderHeader
+               else if same_ascii_case_insensitive name (field_name ReplyToHeader)
+                       then Just ReplyToHeader
+                       else if same_ascii_case_insensitive name (field_name ToHeader)
+                               then Just ToHeader
+                               else if same_ascii_case_insensitive name (field_name CcHeader)
+                                       then Just CcHeader
+                                       else if same_ascii_case_insensitive name (field_name SubjectHeader)
+                                               then Just SubjectHeader
+                                               else Nothing
+
+same_header : SearchHeader → SearchHeader → Bool
+same_header FromHeader FromHeader = True
+same_header SenderHeader SenderHeader = True
+same_header ReplyToHeader ReplyToHeader = True
+same_header ToHeader ToHeader = True
+same_header CcHeader CcHeader = True
+same_header SubjectHeader SubjectHeader = True
+same_header _ _ = False
+
+header_is_selected : List SearchHeader → SearchHeader → Bool
+header_is_selected [] wanted = False
+header_is_selected (header :: rest) wanted =
+    same_header header wanted
+    || header_is_selected rest wanted
+
+append_fold :
+    List MailSourceOctet →
+    List MailSourceOctet →
+    List MailSourceOctet
+append_fold current continuation =
+    current ++ (space :: trim_left_white_space continuation)
+
+finish_current :
+    Maybe SearchableHeaderValue →
+    List SearchableHeaderValue →
+    List SearchableHeaderValue
+finish_current Nothing accumulated = accumulated
+finish_current (Just value) accumulated = value :: accumulated
+
+parse_searchable_headers_from :
+    List MailSourceOctet →
+    Maybe SearchableHeaderValue →
+    List SearchableHeaderValue →
+    List SearchableHeaderValue
+parse_searchable_headers_from [] current accumulated =
+    reverse (finish_current current accumulated)
+parse_searchable_headers_from octets current accumulated =
+    case read_physical_line octets of
+        Line [] rest =>
+            reverse (finish_current current accumulated)
+        Line line rest =>
+            if starts_with_white_space line
+               then
+                   case current of
+                       Nothing =>
+                           parse_searchable_headers_from
+                               rest
+                               Nothing
+                               accumulated
+                       Just (SearchableValue header value) =>
+                           parse_searchable_headers_from
+                               rest
+                               (Just
+                                   (SearchableValue
+                                       header
+                                       (append_fold value line)))
+                               accumulated
+               else
+                   let completed =
+                           finish_current current accumulated
+                   in case split_header_field line of
+                          NotAField =>
+                              parse_searchable_headers_from
+                                  rest
+                                  Nothing
+                                  completed
+                          FieldParts name value =>
+                              case header_from_name name of
+                                  Nothing =>
+                                      parse_searchable_headers_from
+                                          rest
+                                          Nothing
+                                          completed
+                                  Just header =>
+                                      parse_searchable_headers_from
+                                          rest
+                                          (Just (SearchableValue header value))
+                                          completed
+
+export
+parse_searchable_headers :
+    List MailSourceOctet →
+    List SearchableHeaderValue
+parse_searchable_headers octets =
+    parse_searchable_headers_from octets Nothing []
+
+starts_with_needle :
+    List MailSourceOctet →
+    List MailSourceOctet →
+    Bool
+starts_with_needle [] haystack = True
+starts_with_needle (_ :: _) [] = False
+starts_with_needle (needle :: needle_rest) (value :: value_rest) =
+    same_source_octet_ascii_case_insensitive needle value
+    && starts_with_needle needle_rest value_rest
+
+contains_needle :
+    List MailSourceOctet →
+    List MailSourceOctet →
+    Bool
+contains_needle [] haystack = False
+contains_needle needle [] = False
+contains_needle needle haystack@(_ :: rest) =
+    starts_with_needle needle haystack
+    || contains_needle needle rest
+
+one_or_more_as_list : OneOrMore a → List a
+one_or_more_as_list (OneThen first rest) = first :: rest
+
+value_matches :
+    HeaderSearchPolicy →
+    SearchableHeaderValue →
+    Bool
+value_matches policy (SearchableValue header value) =
+    header_is_selected (headers policy) header
+    && contains_needle
+           (one_or_more_as_list (needle policy))
+           value
+
+export
+header_block_matches :
+    HeaderSearchPolicy →
+    List MailSourceOctet →
+    Bool
+header_block_matches policy octets =
+    any (value_matches policy) (parse_searchable_headers octets)
+
+export
+header_codes_match :
+    HeaderSearchPolicy →
+    List Bits8 →
+    Bool
+header_codes_match policy codes =
+    header_block_matches policy (map source_octet codes)
