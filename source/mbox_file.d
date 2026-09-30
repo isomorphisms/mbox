@@ -1,7 +1,7 @@
 module mbox_file;
 
 import core.stdc.stdio : SEEK_END;
-import core.sys.posix.fcntl : O_CREAT, O_EXCL, O_RDWR, O_WRONLY, open;
+import core.sys.posix.fcntl : O_CREAT, O_EXCL, O_RDONLY, O_RDWR, O_WRONLY, open;
 import core.sys.posix.sys.stat : S_IRUSR, S_IWUSR, fstat, stat_t;
 import core.sys.posix.unistd : close, fsync;
 
@@ -17,6 +17,7 @@ import std.file :
     rename,
     setAttributes;
 import std.getopt : defaultGetoptPrinter, getopt;
+import std.path : dirName;
 import std.process : environment, thisProcessID;
 import std.regex : matchFirst, regex;
 import std.stdio : File, LockType, stderr, stdout;
@@ -30,6 +31,7 @@ import mbox :
     scanMbox;
 
 enum rewriteHeadroom = 64UL * 1024 * 1024;
+enum maxHeaderBytes = 4UL * 1024 * 1024;
 enum ioChunk = 1024 * 1024;
 
 struct SelectedMessage {
@@ -207,6 +209,21 @@ private void syncFile(ref File file, string description)
         "mbox-file: fsync failed for " ~ description);
 }
 
+private void syncParentDirectory(string path)
+{
+    auto parent = dirName(path);
+    if (parent.length == 0)
+        parent = ".";
+
+    const fd = open(toStringz(parent), O_RDONLY);
+    enforce(fd >= 0,
+        "mbox-file: cannot open parent directory for fsync: " ~ parent);
+    scope(exit) close(fd);
+
+    enforce(fsync(fd) == 0,
+        "mbox-file: fsync failed for parent directory: " ~ parent);
+}
+
 private void requireSameOwnerGroup(
     ref File source,
     ref File replacement
@@ -228,7 +245,7 @@ private void requireSameOwnerGroup(
 private void probeRewrite(ref File source, string sourcePath)
 {
     const probePath =
-        sourcePath ~ ".mbox-file-probe." ~ to!string(thisProcessID);
+        sourcePath ~ ".mbox-file-probe." ~ to!string(thisProcessID());
 
     auto probe = createExclusive(probePath);
     scope(exit) {
@@ -248,6 +265,10 @@ private bool recordMatches(R)(
     ref R matcher
 )
 {
+    enforce(record.headerRange.length <= maxHeaderBytes,
+        "mbox-file: unreasonably large header at source byte " ~
+        to!string(record.messageRange.start));
+
     const headerBytes = readRange(source, record.headerRange);
     const fields = parseHeaderBlock(headerBytes);
 
@@ -332,7 +353,7 @@ private void rewriteSource(
 )
 {
     const tempPath =
-        sourcePath ~ ".mbox-file-rewrite." ~ to!string(thisProcessID);
+        sourcePath ~ ".mbox-file-rewrite." ~ to!string(thisProcessID());
 
     auto temp = createExclusive(tempPath);
     requireSameOwnerGroup(source, temp);
@@ -371,6 +392,7 @@ private void rewriteSource(
     temp.close();
 
     rename(tempPath, sourcePath);
+    syncParentDirectory(sourcePath);
     keepTemp = false;
 }
 
@@ -442,6 +464,7 @@ private int runMove(
 
     probeRewrite(source, sourcePath);
 
+    const archiveExisted = exists(archivePath);
     auto archive = File(archivePath, "a+b");
     bool archiveLocked;
     DotLock archiveDot;
@@ -477,6 +500,8 @@ private int runMove(
     // Source deletion is not allowed until every needed archive append is
     // flushed through the filesystem.
     syncFile(archive, "archive mailbox");
+    if (!archiveExisted)
+        syncParentDirectory(archivePath);
 
     rewriteSource(source, sourcePath, selected, sourceSize);
 
@@ -535,6 +560,9 @@ int main(string[] arguments)
 
         sourcePath = expandUser(sourcePath);
         archivePath = expandUser(archivePath);
+
+        enforce(sourcePath != archivePath,
+            "mbox-file: source and archive paths are the same");
 
         bool[string] wantedHeaders;
         foreach (name; headerNames)
