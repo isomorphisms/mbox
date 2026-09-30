@@ -3,10 +3,12 @@ module Mbox where
 open import Data.Bool using (Bool; true; false)
 open import Data.Fin using (Fin; toℕ)
 open import Data.List using (List; []; _∷_; _++_)
+open import Data.List.Properties using (++-assoc)
 open import Data.Maybe using (Maybe; just; nothing)
 open import Data.Nat using (ℕ; _≤_; _∸_)
 import Data.Nat as Nat
 open import Data.String using (String)
+open import Relation.Binary.PropositionalEquality using (_≡_; refl; cong; sym)
 
 -- Raw mail is bytes.  Text decoding is deliberately outside the framing model.
 Byte : Set
@@ -237,6 +239,32 @@ feed f [] = fed f []
 feed f (b ∷ bs) with step f b
 ... | fed f′ first-events with feed f′ bs
 ...   | fed f″ later-events = fed f″ (first-events ++ later-events)
+
+-- Continue a completed feed result with another chunk while retaining the
+-- already-emitted events.
+feed-then : FeedResult → List Byte → FeedResult
+feed-then (fed f first-events) later with feed f later
+... | fed final-state later-events =
+  fed final-state (first-events ++ later-events)
+
+-- Chunking is semantically invisible: feeding x ++ y in one call is equal to
+-- feeding x and then y while carrying the returned state. This is stronger
+-- than checking selected fixture split points and is the invariant the other
+-- language implementations should mirror.
+feed-++ : (f : Framer) → (x y : List Byte) →
+  feed f (x ++ y) ≡ feed-then (feed f x) y
+feed-++ f [] y with feed f y
+... | fed final-state later-events = refl
+feed-++ f (b ∷ bs) y with step f b
+... | fed next-state first-events
+  with feed next-state bs
+...   | fed middle-state middle-events
+  with feed middle-state y
+...     | fed final-state later-events
+  rewrite feed-++ next-state bs y =
+    cong
+      (fed final-state)
+      (sym (++-assoc first-events middle-events later-events))
 
 -- EOF is explicit because feed itself cannot know whether another chunk is
 -- coming.  An envelope line terminated by EOF denotes an empty RFC message,
