@@ -62,3 +62,17 @@ libgcc, before this repository is compiled: the compiler ICEs in
 `tree-complex.cc` while compiling the complex multiply helpers.  Therefore
 the filer source and tests are reviewed but are **not yet compile-verified on
 the approved SDF/NetBSD path**.  No ordinary-compiler fallback has been used.
+
+## Transaction fixture status
+
+The shared transaction fixtures from `main` are present on this branch.
+
+Current D behavior is expected to satisfy the fresh-run multiplicity rule:
+selected occurrences are copied one-for-one and byte-identical source entries
+are not collapsed.
+
+Current D behavior is **not conformant** to the crash/retry transaction contract
+yet because it has no durable transaction journal. In particular, a restart
+after archive fsync but before source replacement can append the same
+transaction occurrences again. The new recovery fixtures are intentionally a
+red gate for that work rather than an excuse to deduplicate by content.
