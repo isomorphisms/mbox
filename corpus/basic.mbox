@@ -1,0 +1,21 @@
+From alice@example.org Tue Sep 29 12:00:00 2026
+From: Alice <alice@example.org>
+To: SPEC-LIST <spec-list@example.org>
+Subject: first
+
+alpha
+>From this is body text
+From bob@example.org Tue Sep 29 12:01:00 2026
+From: Bob <bob@example.org>
+To: "Example, Person" <person@example.org>,
+ SPEC-LIST <spec-list@example.org>
+Cc: other@example.org
+Subject: folded recipients
+
+beta
+From carol@example.org Tue Sep 29 12:02:00 2026
+From: Carol <carol@example.org>
+To: nobody@example.org
+Subject: leave here
+
+gamma
