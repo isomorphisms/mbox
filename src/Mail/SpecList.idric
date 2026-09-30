@@ -1,0 +1,23 @@
+module Mail.SpecList
+
+import Mail.HeaderSelection
+import Mail.Source
+
+spec_list_needle : OneOrMore MailSourceOctet
+spec_list_needle =
+    OneThen
+        (source_octet 83)
+        (map source_octet [80, 69, 67, 45, 76, 73, 83, 84])
+
+public export
+spec_list_policy : HeaderSearchPolicy
+spec_list_policy =
+    SearchHeaderValues
+        [ FromHeader
+        , SenderHeader
+        , ReplyToHeader
+        , ToHeader
+        , CcHeader
+        , SubjectHeader
+        ]
+        spec_list_needle
