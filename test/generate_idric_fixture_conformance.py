@@ -31,6 +31,21 @@ import Data.Bits
 import Mail.Mbox
 import Mail.Source
 
+all_splits :
+    List Bits8 →
+    List Bits8 →
+    List Bits8 →
+    Bool
+all_splits reversed_prefix [] whole =
+    same_events
+        (frame_codes_chunks (reverse reversed_prefix) [])
+        (frame_codes whole)
+all_splits reversed_prefix remaining@(octet :: rest) whole =
+    same_events
+        (frame_codes_chunks (reverse reversed_prefix) remaining)
+        (frame_codes whole)
+    && all_splits (octet :: reversed_prefix) rest whole
+
 """)
 
 checks = []
@@ -46,6 +61,11 @@ for name, filename in fixtures:
     print(f"{name}_ok = same_events (frame_codes {name}_bytes) {name}_expected")
     print()
     checks.append(f"{name}_ok")
+
+print("lf_chunk_equivalence : Bool")
+print("lf_chunk_equivalence = all_splits [] lf_bytes lf_bytes")
+print()
+checks.append("lf_chunk_equivalence")
 
 print("all_ok : Bool")
 print("all_ok = " + " && ".join(checks))
