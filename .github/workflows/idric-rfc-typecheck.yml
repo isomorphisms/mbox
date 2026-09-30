@@ -1,0 +1,78 @@
+name: Idriç RFC parser typecheck
+
+on:
+  push:
+    branches:
+      - "Idriç"
+    paths:
+      - "src/Mail/Source.idric"
+      - "src/Mail/Rfc*.idric"
+      - "src/Mail/Rfc5322/**/*.idric"
+      - "src/MailTypesTypecheck.idric"
+      - ".github/workflows/idric-rfc-typecheck.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: idric-rfc-parser-typecheck
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out mbox
+        uses: actions/checkout@v4
+        with:
+          path: mbox
+
+      - name: Check out pinned Idriç compiler
+        uses: actions/checkout@v4
+        with:
+          repository: isomorphisms/Idric
+          ref: "51e3892d4de59943e42e65c60a9814aba792c5d4"
+          path: idric
+
+      - name: Restore pinned compiler build
+        id: idric-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            idric/_/.tools
+            idric/_/bootstrap-build
+            idric/_/build
+            idric/_/libs/prelude/build
+            idric/_/libs/base/build
+            idric/_/libs/contrib/build
+            idric/_/libs/linear/build
+            idric/_/libs/network/build
+            idric/_/libs/test/build
+          key: idric-linux-51e3892d4de59943e42e65c60a9814aba792c5d4-v1
+
+      - name: Bootstrap on cache miss
+        if: steps.idric-cache.outputs.cache-hit != 'true'
+        working-directory: idric
+        run: ./edric bootstrap
+
+      - name: Save compiler on cache miss
+        if: steps.idric-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            idric/_/.tools
+            idric/_/bootstrap-build
+            idric/_/build
+            idric/_/libs/prelude/build
+            idric/_/libs/base/build
+            idric/_/libs/contrib/build
+            idric/_/libs/linear/build
+            idric/_/libs/network/build
+            idric/_/libs/test/build
+          key: idric-linux-51e3892d4de59943e42e65c60a9814aba792c5d4-v1
+
+      - name: Typecheck RFC semantic and lexical modules
+        run: |
+          ./idric/edric --emit-one-step             mbox/src/MailTypesTypecheck.idric             -o mbox/idric-rfc-parser.one-step
+          grep -F "$(printf 'core_typecheck\tPASS')" mbox/idric-rfc-parser.one-step
