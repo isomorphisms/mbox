@@ -429,9 +429,9 @@ func parse_addresses(field_values) {
         }
         if (c === ',') {
           if (angle_depth === 0) {
-            var token = trim_ascii(value[start : i])
-            if (token !== '') {
-              call out->append(parse_mailbox_token(token))
+            var piece = trim_ascii(value[start : i])
+            if (piece !== '') {
+              call out->append(parse_mailbox_token(piece))
             }
             setvar start = i + 1
           }
@@ -439,9 +439,9 @@ func parse_addresses(field_values) {
       }
     }
 
-    var token = trim_ascii(value[start :])
-    if (token !== '') {
-      call out->append(parse_mailbox_token(token))
+    var tail_token = trim_ascii(value[start :])
+    if (tail_token !== '') {
+      call out->append(parse_mailbox_token(tail_token))
     }
   }
 
