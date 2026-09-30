@@ -137,6 +137,22 @@ jobs:
           )
           grep -F "$(printf 'selected\t9')" mbox/idric-spec-list-scan.out
 
+      - name: Run Idriç transaction recovery planner
+        run: |
+          python3 mbox/test/generate_idric_transaction_conformance.py > mbox/src/TransactionFixtureRuntime.idric
+          support="$GITHUB_WORKSPACE/idric/_"
+          idric_library_path="$support/libs/prelude/build/ttc:$support/libs/base/build/ttc:$support/libs/linear/build/ttc:$support/libs/network/build/ttc:$support/libs/contrib/build/ttc:$support/libs/test/build/ttc:"
+          (
+            cd mbox/src
+            PATH="$support/.tools/bin:$PATH" \
+            CHEZ="$support/.tools/bin/scheme" \
+            IDRIS2_PREFIX="$support/bootstrap-build" \
+            IDRIS2_PATH="$idric_library_path" \
+              "$support/build/exec/idris2" TransactionFixtureRuntime.idric -o idric-transaction-fixtures
+            ./build/exec/idric-transaction-fixtures | tee ../idric-transaction-fixtures.out
+          )
+          grep -Fx 'PASS Idriç transaction recovery planner' mbox/idric-transaction-fixtures.out
+
       - name: Emit normalized Idriç receipt
         working-directory: mbox
         run: |
