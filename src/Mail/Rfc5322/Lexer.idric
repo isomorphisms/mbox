@@ -43,6 +43,14 @@ record HeaderFieldPrefix where
     name : FieldName
     separator : HeaderFieldSeparator
 
+public export
+record ObsoleteHeaderFieldPrefix where
+    constructor BeginsHistoricalHeaderField
+    source : SourceSlice
+    name : FieldName
+    white_space_before_separator : OneOrMore WhiteSpace
+    separator : HeaderFieldSeparator
+
 space_octet : MailSourceOctet
 space_octet = source_octet 32
 
@@ -273,3 +281,32 @@ read_header_field_prefix cursor@(AtMailSource source begins octets) =
                                 name
                                 separator)
                             after_separator
+
+
+-- Section 4 permits white space before the colon in obsolete field syntax.
+-- This recognizer requires at least one WSP so current syntax is never
+-- needlessly reclassified as obsolete.
+read_obsolete_header_field_prefix : LexerCursor → Maybe (Parsed ObsoleteHeaderFieldPrefix)
+read_obsolete_header_field_prefix cursor@(AtMailSource source begins octets) =
+    case read_field_name cursor of
+        Nothing => Nothing
+        Just (ParsedValue name after_name) =>
+            case scan_white_space after_name of
+                ScannedWhiteSpace white_space after_white_space =>
+                    case as_one_or_more white_space of
+                        Nothing => Nothing
+                        Just historical_spacing =>
+                            case read_header_field_separator after_white_space of
+                                Nothing => Nothing
+                                Just (ParsedValue separator after_separator) =>
+                                    Just $
+                                        ParsedValue
+                                            (BeginsHistoricalHeaderField
+                                                (slice_between
+                                                    source
+                                                    begins
+                                                    (next_octet after_separator))
+                                                name
+                                                historical_spacing
+                                                separator)
+                                            after_separator

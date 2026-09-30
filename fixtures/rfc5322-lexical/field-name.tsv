@@ -3,7 +3,10 @@
 46 72 6f 6d 3a 20	field-name + ":"	HeaderFieldPrefix(FieldName)	20	From: then SP body
 58 2d 54 65 73 74 3a	field-name + ":"	HeaderFieldPrefix(FieldName)	-	X-Test remains a legal extension name
 3a	field-name + ":"	NO_MATCH	3a	field-name requires 1*ftext
-46 72 6f 6d 20 3a	field-name + ":"	NO_MATCH	46 72 6f 6d 20 3a	WSP before colon is obsolete field syntax, not current syntax
+46 72 6f 6d 20 3a	current field-name + ":"	NO_MATCH	46 72 6f 6d 20 3a	WSP before colon is obsolete field syntax, not current syntax
+46 72 6f 6d 20 3a	obsolete field prefix	ObsoleteHeaderFieldPrefix	-	section 4 permits WSP before colon
+46 72 6f 6d 09 20 3a	obsolete field prefix	ObsoleteHeaderFieldPrefix	-	section 4 permits *WSP before colon
+46 72 6f 6d 3a	obsolete field prefix	NO_MATCH	46 72 6f 6d 3a	current syntax is not reclassified as obsolete merely because *WSP can be zero
 53 75 62 20 6a 65 63 74 3a	field-name + ":"	NO_MATCH	53 75 62 20 6a 65 63 74 3a	SP is not ftext
 53 75 62 3a 6a 65 63 74	field-name + ":"	HeaderFieldPrefix(FieldName)	6a 65 63 74	colon terminates the name
 c3 a9 3a	field-name + ":"	NO_MATCH	c3 a9 3a	RFC 6532 does not internationalize field names
