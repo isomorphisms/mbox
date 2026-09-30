@@ -3,7 +3,7 @@
 This branch implements the v0 mailbox contract in Grease, on the current
 Oils/YSH-derived line.
 
-Current code: `source/mbox.ysh`.
+Current code: `source/mbox.grease`.
 
 Implemented:
 
@@ -19,7 +19,7 @@ Implemented:
 - domain-case-folded addr-spec comparison;
 - byte-for-byte views of complete entries and RFC messages.
 
-`test/basic.ysh` consumes the shared corpus and also exercises CRLF input,
+`test/basic.grease` consumes the shared corpus and also exercises CRLF input,
 folding, malformed header material, and a NUL byte in the body.
 
 Not yet implemented:
