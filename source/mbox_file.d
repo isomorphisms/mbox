@@ -7,7 +7,6 @@ import core.sys.posix.unistd : close, fsync;
 
 import std.algorithm : min;
 import std.conv : to;
-import std.digest.sha : SHA256;
 import std.exception : enforce;
 import std.file :
     exists,
@@ -33,11 +32,6 @@ import mbox :
 enum rewriteHeadroom = 64UL * 1024 * 1024;
 enum maxHeaderBytes = 4UL * 1024 * 1024;
 enum ioChunk = 1024 * 1024;
-
-struct SelectedMessage {
-    MboxRecord record;
-    string digest;
-}
 
 struct DotLock {
     string path;
@@ -65,42 +59,6 @@ private string asciiLowerCopy(scope const(char)[] value)
             out[i] = c;
     }
     return cast(string) out;
-}
-
-private string hexDigest(ubyte[32] digest)
-{
-    enum digits = "0123456789abcdef";
-    auto out = new char[](64);
-    foreach (i, b; digest) {
-        out[i * 2] = digits[b >> 4];
-        out[i * 2 + 1] = digits[b & 0x0f];
-    }
-    return cast(string) out;
-}
-
-private string sha256Range(ref File source, ByteRange range)
-{
-    source.seek(cast(long) range.start);
-
-    SHA256 sha;
-    sha.start();
-
-    auto buffer = new ubyte[](ioChunk);
-    ByteOffset remaining = range.length;
-
-    while (remaining != 0) {
-        const wanted = cast(size_t) min(
-            remaining,
-            cast(ByteOffset) buffer.length
-        );
-        auto got = source.rawRead(buffer[0 .. wanted]);
-        enforce(got.length == wanted,
-            "mbox-file: short read while hashing mailbox");
-        sha.put(got);
-        remaining -= got.length;
-    }
-
-    return hexDigest(sha.finish());
 }
 
 private string readRange(ref File source, ByteRange range)
@@ -292,98 +250,36 @@ private MboxRecord[] records(ref File mailbox)
     return result;
 }
 
-private size_t[string] entryDigestCounts(ref File archive)
-{
-    size_t[string] result;
-    const all = records(archive);
-    foreach (record; all)
-        ++result[sha256Range(archive, record.wholeRange)];
-    return result;
-}
-
-private bool consumeArchivedOccurrence(
-    ref size_t[string] remaining,
-    string digest
-)
-{
-    auto count = digest in remaining;
-    if (count is null || *count == 0)
-        return false;
-
-    --*count;
-    return true;
-}
-
-private size_t uncoveredCount(
-    scope const SelectedMessage[] selected,
-    ref size_t[string] archived
-)
-{
-    size_t uncovered;
-    auto remaining = archived.dup;
-
-    foreach (message; selected)
-        if (!consumeArchivedOccurrence(remaining, message.digest))
-            ++uncovered;
-
-    return uncovered;
-}
-
-private void requireAppendBoundary(ref File archive)
-{
-    const length = archive.size;
-    if (length == 0)
-        return;
-
-    archive.seek(-1, SEEK_END);
-    ubyte[1] tail;
-    const got = archive.rawRead(tail[]);
-    enforce(got.length == 1,
-        "mbox-file: cannot read archive tail before append");
-    enforce(tail[0] == '\n',
-        "mbox-file: archive does not end at a line boundary; refusing to append");
-}
-
-private SelectedMessage[] selectMessages(R)(
+private MboxRecord[] selectMessages(R)(
     ref File source,
     ref bool[string] wantedHeaders,
     ref R matcher
 )
 {
-    SelectedMessage[] selected;
+    MboxRecord[] selected;
     const all = records(source);
 
     foreach (record; all) {
         if (!recordMatches(source, record, wantedHeaders, matcher))
             continue;
 
-        selected ~= SelectedMessage(
-            record,
-            sha256Range(source, record.wholeRange)
-        );
+        selected ~= record;
     }
 
     return selected;
 }
 
-private void printPlan(
-    scope const SelectedMessage[] selected,
-    ref size_t[string] archived
-)
+private void printPlan(scope const MboxRecord[] selected)
 {
-    const wouldAppend = uncoveredCount(selected, archived);
-    const alreadyArchived = selected.length - wouldAppend;
-
     stdout.writeln("matched: ", selected.length);
-    stdout.writeln("already archived: ", alreadyArchived);
-    stdout.writeln("would append: ", wouldAppend);
+    stdout.writeln("would append: ", selected.length);
     stdout.writeln("would remove from source: ", selected.length);
 }
 
 private void rewriteSource(
     ref File source,
     string sourcePath,
-    scope const SelectedMessage[] selected,
+    scope const MboxRecord[] selected,
     ByteOffset sourceSize
 )
 {
@@ -411,7 +307,7 @@ private void rewriteSource(
 
     ByteOffset cursor;
     foreach (message; selected) {
-        const whole = message.record.wholeRange;
+        const whole = message.wholeRange;
         enforce(whole.start >= cursor && whole.end <= sourceSize,
             "mbox-file: selected ranges are not ordered");
 
@@ -446,15 +342,9 @@ private int runDry(
 
     auto selected = selectMessages(source, wantedHeaders, matcher);
 
-    size_t[string] archived;
-    if (exists(archivePath)) {
-        auto archive = File(archivePath, "rb");
-        archived = entryDigestCounts(archive);
-    }
-
     enforce(source.size == initialSourceSize,
         "mbox-file: source mailbox changed during dry run; rerun");
-    printPlan(selected, archived);
+    printPlan(selected);
     stdout.writeln("dry run: no mailbox bytes changed");
     return 0;
 }
@@ -520,19 +410,12 @@ private int runMove(
     enforce(!sameFile(source, archive),
         "mbox-file: source and archive are the same file");
 
-    auto archived = entryDigestCounts(archive);
-    printPlan(selected, archived);
+    printPlan(selected);
+    requireAppendBoundary(archive);
 
-    if (uncoveredCount(selected, archived) != 0)
-        requireAppendBoundary(archive);
-
-    auto remainingArchived = archived.dup;
     archive.seek(0, SEEK_END);
     foreach (message; selected) {
-        if (consumeArchivedOccurrence(remainingArchived, message.digest))
-            continue;
-
-        const whole = message.record.wholeRange;
+        const whole = message.wholeRange;
         copyRange(source, archive, whole.start, whole.end);
     }
 
@@ -683,54 +566,30 @@ unittest {
 
 unittest {
     enum sample =
-        "From envelope-one Wed Sep 30 01:00:00 2026\n" ~
-        "Message-ID: <reused@example.org>\n" ~
-        "Subject: first\n\n" ~
-        "same body\n" ~
-        "From envelope-two Wed Sep 30 01:01:00 2026\n" ~
-        "Message-ID: <reused@example.org>\n" ~
-        "Subject: second\n\n" ~
-        "same body\n" ~
-        "From different-envelope Wed Sep 30 01:02:00 2026\n" ~
-        "Message-ID: <reused@example.org>\n" ~
-        "Subject: first\n\n" ~
-        "same body\n";
+        "From exact@example.org Tue Sep 29 05:04:00 2026\n" ~
+        "From: exact@example.org\n" ~
+        "To: SPEC-LIST@example.org\n" ~
+        "Message-ID: <exact-duplicate@example.org>\n" ~
+        "Subject: exact duplicate entry\n\n" ~
+        "same exact body\n" ~
+        "From exact@example.org Tue Sep 29 05:04:00 2026\n" ~
+        "From: exact@example.org\n" ~
+        "To: SPEC-LIST@example.org\n" ~
+        "Message-ID: <exact-duplicate@example.org>\n" ~
+        "Subject: exact duplicate entry\n\n" ~
+        "same exact body\n";
 
     auto source = File.tmpfile();
     source.rawWrite(sample);
     source.flush();
 
-    const all = records(source);
-    assert(all.length == 3);
+    bool[string] wantedHeaders;
+    wantedHeaders["to"] = true;
+    auto matcher = regex("SPEC-LIST", "i");
 
-    const first = sha256Range(source, all[0].wholeRange);
-    const second = sha256Range(source, all[1].wholeRange);
-    const third = sha256Range(source, all[2].wholeRange);
+    const selected = selectMessages(source, wantedHeaders, matcher);
 
-    // Reused Message-ID values do not collapse distinct entries.
-    assert(first != second);
-    assert(first != third);
-
-    // Retry accounting is multiplicity-aware: one archived occurrence covers
-    // only one of two equal selected entries.
-    size_t[string] archived;
-    archived[first] = 1;
-    assert(consumeArchivedOccurrence(archived, first));
-    assert(!consumeArchivedOccurrence(archived, first));
-
-    SelectedMessage[] equalSelected = [
-        SelectedMessage(all[0], first),
-        SelectedMessage(all[0], first),
-    ];
-
-    size_t[string] emptyArchive;
-    assert(uncoveredCount(equalSelected, emptyArchive) == 2);
-
-    size_t[string] oneArchived;
-    oneArchived[first] = 1;
-    assert(uncoveredCount(equalSelected, oneArchived) == 1);
-
-    size_t[string] twoArchived;
-    twoArchived[first] = 2;
-    assert(uncoveredCount(equalSelected, twoArchived) == 0);
+    // Equal mailbox entries remain separate occurrences.
+    assert(selected.length == 2);
+    assert(selected[0].wholeRange.length == selected[1].wholeRange.length);
 }
