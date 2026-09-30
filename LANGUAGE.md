@@ -11,11 +11,21 @@ This branch is the proof/model side of the shared mail contract.
 - address views;
 - source-bound resume cursors;
 - the bounded state of an incremental mboxo framer;
-- framing events and feed results.
+- framing events and feed results;
+- executable `step`, `feed`, and explicit-EOF `finish`.
 
-The next executable step is `feed : Framer → List Byte → FeedResult`, followed
-by a chunking-equivalence proof.  That is intentionally not postulated here:
-until the function and proof exist, this branch does not claim to parse mail.
+The framer recognizes only a line-leading byte sequence `From `.  A partial
+candidate is retained across calls to `feed`, so a chunk may end after any of
+the five separator bytes without changing the eventual framing.  Header and
+MIME interpretation remain outside framing.
 
-The types mirror `CONTRACT.md`; they do not model MIME text as the authority for
-the underlying message bytes.
+The next proof obligation is chunking equivalence: feeding `x` and then `y`
+must have the same final state and ordered event stream as feeding `x ++ y`.
+That proof must be constructive; this branch should not postulate it.
+
+After framing is typechecked and the chunking theorem is in place, the next
+executable layer is raw RFC-header parsing with exact ranges/folding, followed
+by the deliberately small recipient-address grammar in `CONTRACT.md`.
+
+The types mirror `CONTRACT.md`; decoded text is never the authority for the
+underlying message bytes.
