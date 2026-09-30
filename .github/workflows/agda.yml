@@ -22,4 +22,6 @@ jobs:
         run: |
           STDLIB_FILE="$(dpkg -L agda-stdlib | grep '/Data/List.agda$' | head -n 1)"
           STDLIB="$(dirname "$(dirname "$STDLIB_FILE")")"
-          agda -i src -i "$STDLIB" src/Mbox.agda
+          WORK_STDLIB="$RUNNER_TEMP/agda-stdlib"
+          cp -a "$STDLIB" "$WORK_STDLIB"
+          agda -i src -i "$WORK_STDLIB" src/Mbox.agda
