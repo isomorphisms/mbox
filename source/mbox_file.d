@@ -380,6 +380,9 @@ private int runMove(
 
     const archiveExisted = exists(archivePath);
     auto archive = File(archivePath, "a+b");
+    enforce(!sameFile(source, archive),
+        "mbox-file: source and archive are the same file");
+
     bool archiveLocked;
     DotLock archiveDot;
 
@@ -394,9 +397,6 @@ private int runMove(
     archive.lock(LockType.readWrite);
     archiveLocked = true;
     acquireDotLock(archiveDot, archivePath);
-
-    enforce(!sameFile(source, archive),
-        "mbox-file: source and archive are the same file");
 
     printPlan(selected);
     requireAppendBoundary(archive);
