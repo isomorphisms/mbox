@@ -86,11 +86,15 @@ jobs:
           ./idric/edric --emit-one-step mbox/src/MailTypecheck.idric -o mbox/idric-mail.one-step
           grep -F "$(printf 'core_typecheck\tPASS')" mbox/idric-mail.one-step
 
-      - name: Generate framing proofs from exact shared fixture bytes
+      - name: Run exact shared fixture bytes through Idriç framer
         run: |
-          python3 mbox/test/generate_idric_fixture_conformance.py > mbox/src/MboxFixtureTypecheck.idric
-          ./idric/edric --emit-one-step mbox/src/MboxFixtureTypecheck.idric -o mbox/idric-fixtures.one-step
-          grep -F "$(printf 'core_typecheck\tPASS')" mbox/idric-fixtures.one-step
+          python3 mbox/test/generate_idric_fixture_conformance.py > mbox/src/MboxFixtureRuntime.idric
+          (
+            cd mbox
+            ../idric/_/build/exec/idris2 -i src src/MboxFixtureRuntime.idric -o idric-fixtures
+            ./build/exec/idric-fixtures | tee idric-fixtures.out
+          )
+          grep -Fx 'PASS Idriç shared framing fixtures' mbox/idric-fixtures.out
 
       - name: Emit normalized Idriç receipt
         working-directory: mbox
