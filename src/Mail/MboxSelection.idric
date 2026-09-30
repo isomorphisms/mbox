@@ -58,6 +58,13 @@ line_is_blank _ = False
 drop_four : List a → List a
 drop_four values = drop 4 values
 
+subtract_four : Nat → Nat
+subtract_four Z = Z
+subtract_four (S Z) = Z
+subtract_four (S (S Z)) = Z
+subtract_four (S (S (S Z))) = Z
+subtract_four (S (S (S (S rest)))) = rest
+
 rollback_envelope_candidate : EntryStage → EntryStage
 rollback_envelope_candidate ReadingEnvelope = ReadingEnvelope
 rollback_envelope_candidate (ReadingBody selected) =
@@ -67,7 +74,7 @@ rollback_envelope_candidate
         ReadingHeaders
             (drop_four header_reversed)
             (drop_four line_reversed)
-            (count - 4)
+            (subtract_four count)
 
 stage_matches :
     HeaderSearchPolicy →
