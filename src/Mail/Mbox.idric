@@ -173,11 +173,13 @@ feed_octet state octet =
         Just candidate => continue_candidate state candidate octet
 
 feed_octets : FramerState → List MailSourceOctet → FeedResult
-feed_octets state [] = Fed state []
-feed_octets state (octet :: rest) =
-    let first = feed_octet state octet
-        later = feed_octets (state first) rest
-    in Fed (state later) (events first ++ events later)
+feed_octets current_state [] = Fed current_state []
+feed_octets current_state (octet :: rest) =
+    case feed_octet current_state octet of
+        Fed next_state first_events =>
+            case feed_octets next_state rest of
+                Fed final_state later_events =>
+                    Fed final_state (first_events ++ later_events)
 
 finish_framing : FramerState → List FramingEvent
 finish_framing state =
