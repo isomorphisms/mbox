@@ -44,19 +44,25 @@ for field in (messages[1].headers) {
   }
 }
 assert [to_field !== null]
-var expected_raw_to = 'To: "Example, Person" <person@example.org>,' ++ b'\y0a' ++
+var expected_raw_to = (
+  'To: "Example, Person" <person@example.org>,' ++ b'\y0a' ++
   ' SPEC-LIST <spec-list@example.org>' ++ b'\y0a'
-var expected_raw_to_value = ' "Example, Person" <person@example.org>,' ++ b'\y0a' ++
+)
+var expected_raw_to_value = (
+  ' "Example, Person" <person@example.org>,' ++ b'\y0a' ++
   ' SPEC-LIST <spec-list@example.org>'
+)
 assert [header_raw_bytes(bytes, to_field) === expected_raw_to]
 assert [header_raw_value_bytes(bytes, to_field) === expected_raw_to_value]
 
-var edge = b'From edge@example.org Tue Sep 29 12:03:00 2026\r\n' ++
+var edge = (
+  b'From edge@example.org Tue Sep 29 12:03:00 2026\r\n' ++
   b'X-Good: one\r\n' ++
   b' two\r\n' ++
   b'broken header\r\n' ++
   b'\r\n' ++
   b'body\y00bytes\r\n'
+)
 
 var edge_messages = parse_mbox(edge)
 assert [1 === len(edge_messages)]
