@@ -415,12 +415,24 @@ data DomainText
     | ObsoleteDomainTextSyntax ObsoleteDomainText
 
 public export
+record DomainLiteralOpeningBracket where
+    constructor OpensDomainLiteral
+    source : SourceSlice
+
+public export
+record DomainLiteralClosingBracket where
+    constructor ClosesDomainLiteral
+    source : SourceSlice
+
+public export
 record DomainLiteral where
     constructor LiteralDomain
     source : SourceSlice
     before : Maybe CommentsAndFoldingWhiteSpace
+    opening_bracket : DomainLiteralOpeningBracket
     contents : List (Maybe FoldingWhiteSpace, DomainText)
     final_folding_white_space : Maybe FoldingWhiteSpace
+    closing_bracket : DomainLiteralClosingBracket
     after : Maybe CommentsAndFoldingWhiteSpace
 
 public export

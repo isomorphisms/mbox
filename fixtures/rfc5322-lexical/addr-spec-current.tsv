@@ -1,0 +1,4 @@
+# hex octets	production	expected result	expected remaining	note
+75 73 65 72 40 5b 31 32 37 2e 30 2e 30 2e 31 5d	current addr-spec without CFWS	AddrSpec(DotAtomLocalPart user AddressAtSign LiteralDomain [127.0.0.1])	-	domain-literal branch
+22 6c 6f 63 61 6c 20 70 61 72 74 22 40 5b 31 32 37 2e 30 2e 30 2e 31 5d	current addr-spec without CFWS	AddrSpec(QuotedLocalPart AddressAtSign LiteralDomain)	-	quoted local-part plus domain-literal
+61 40 62	current addr-spec without CFWS	AddrSpec(DotAtomLocalPart AddressAtSign DotAtomDomain)	-	dot-atom branches still accepted

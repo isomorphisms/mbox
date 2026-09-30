@@ -1,0 +1,10 @@
+# hex octets	production	expected result	expected remaining	note
+5b 31 32 37 2e 30 2e 30 2e 31 5d	domain-literal without CFWS	DomainLiteral([ 127.0.0.1 ])	-	ordinary address literal syntax
+5b 78 5d	domain-literal without CFWS	DomainLiteral([ x ])	-	minimal dtext content
+5b 5d	domain-literal without CFWS	DomainLiteral(empty)	-	dtext repetition may be empty
+5b 61 20 62 5d	domain-literal without CFWS	DomainLiteral(a FWS b)	-	space is FWS between dtext values
+5b 61 0d 0a 20 62 5d	domain-literal without CFWS	DomainLiteral(a folded-FWS b)	-	current folding white space inside literal
+5b 61 5d 58	domain-literal without CFWS	DomainLiteral(a)	58	closing bracket terminates literal
+78 5d	domain-literal without CFWS	NO_MATCH	78 5d	must begin with left square bracket
+5b 78	domain-literal without CFWS	NO_MATCH	5b 78	unterminated literal
+5b 5c 78 5d	domain-literal without CFWS	NO_MATCH_CURRENT	5b 5c 78 5d	quoted-pair in dtext belongs to obs-dtext in RFC 5322 section 4

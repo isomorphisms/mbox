@@ -83,6 +83,12 @@ double_quote_octet = source_octet 34
 reverse_solidus_octet : MailSourceOctet
 reverse_solidus_octet = source_octet 92
 
+left_square_bracket_octet : MailSourceOctet
+left_square_bracket_octet = source_octet 91
+
+right_square_bracket_octet : MailSourceOctet
+right_square_bracket_octet = source_octet 93
+
 exclamation_mark_octet : MailSourceOctet
 exclamation_mark_octet = source_octet 33
 
@@ -790,6 +796,179 @@ read_addr_spec_with_dot_atom_domain
                     Nothing => Nothing
                     Just (ParsedValue separator after_separator) =>
                         case read_current_dot_atom_domain_without_cfws
+                                 after_separator of
+                            Nothing => Nothing
+                            Just (ParsedValue domain after_domain) =>
+                                let whole =
+                                        slice_between
+                                            source
+                                            begins
+                                            (next_octet after_domain)
+                                in Just $
+                                    ParsedValue
+                                        (InternetAddressSpecification
+                                            whole
+                                            local_part
+                                            separator
+                                            domain)
+                                        after_domain
+
+
+read_domain_literal_opening : LexerCursor → Maybe (Parsed DomainLiteralOpeningBracket)
+read_domain_literal_opening
+    (AtMailSource source begins (octet :: rest)) =
+        if same_source_octet octet left_square_bracket_octet
+           then
+               let ends = advance_offset begins
+               in Just $
+                    ParsedValue
+                        (OpensDomainLiteral
+                            (slice_between source begins ends))
+                        (AtMailSource source ends rest)
+           else Nothing
+read_domain_literal_opening _ = Nothing
+
+read_domain_literal_closing : LexerCursor → Maybe (Parsed DomainLiteralClosingBracket)
+read_domain_literal_closing
+    (AtMailSource source begins (octet :: rest)) =
+        if same_source_octet octet right_square_bracket_octet
+           then
+               let ends = advance_offset begins
+               in Just $
+                    ParsedValue
+                        (ClosesDomainLiteral
+                            (slice_between source begins ends))
+                        (AtMailSource source ends rest)
+           else Nothing
+read_domain_literal_closing _ = Nothing
+
+domain_text_at : SourceIdentity → OctetOffset → MailSourceOctet → Maybe DomainText
+domain_text_at source offset octet =
+    if source_octet_is_ascii_visible octet
+       && not (same_source_octet octet left_square_bracket_octet)
+       && not (same_source_octet octet reverse_solidus_octet)
+       && not (same_source_octet octet right_square_bracket_octet)
+       then Just $
+            CurrentDomainText (single_octet_slice source offset)
+       else Nothing
+
+read_current_domain_text : LexerCursor → Maybe (Parsed DomainText)
+read_current_domain_text
+    (AtMailSource source begins (octet :: rest)) =
+        case domain_text_at source begins octet of
+            Nothing => Nothing
+            Just domain_text =>
+                Just $
+                    ParsedValue
+                        domain_text
+                        (AtMailSource source (advance_offset begins) rest)
+read_current_domain_text _ = Nothing
+
+record DomainLiteralScan where
+    constructor ScannedDomainLiteral
+    parts : List (Maybe FoldingWhiteSpace, DomainText)
+    final_folding_white_space : Maybe FoldingWhiteSpace
+    after : LexerCursor
+
+scan_current_domain_literal :
+    List MailSourceOctet →
+    LexerCursor →
+    List (Maybe FoldingWhiteSpace, DomainText) →
+    DomainLiteralScan
+scan_current_domain_literal [] cursor accumulated =
+    ScannedDomainLiteral (reverse accumulated) Nothing cursor
+scan_current_domain_literal (_ :: fuel) cursor accumulated =
+    case read_current_folding_white_space cursor of
+        Just (ParsedValue folding_white_space after_fws) =>
+            case read_current_domain_text after_fws of
+                Nothing =>
+                    ScannedDomainLiteral
+                        (reverse accumulated)
+                        (Just folding_white_space)
+                        after_fws
+                Just (ParsedValue domain_text after_text) =>
+                    scan_current_domain_literal
+                        fuel
+                        after_text
+                        ((Just folding_white_space, domain_text)
+                         :: accumulated)
+        Nothing =>
+            case read_current_domain_text cursor of
+                Nothing =>
+                    ScannedDomainLiteral
+                        (reverse accumulated)
+                        Nothing
+                        cursor
+                Just (ParsedValue domain_text after_text) =>
+                    scan_current_domain_literal
+                        fuel
+                        after_text
+                        ((Nothing, domain_text) :: accumulated)
+
+-- Current domain-literal without optional outer CFWS.  The opening and closing
+-- brackets are semantic values, not punctuation discarded by the parser.
+read_domain_literal_without_cfws : LexerCursor → Maybe (Parsed DomainLiteral)
+read_domain_literal_without_cfws
+    cursor@(AtMailSource source begins octets) =
+        case read_domain_literal_opening cursor of
+            Nothing => Nothing
+            Just (ParsedValue opening after_opening) =>
+                case scan_current_domain_literal
+                         octets
+                         after_opening
+                         [] of
+                    ScannedDomainLiteral
+                        parts
+                        final_fws
+                        before_closing =>
+                            case read_domain_literal_closing before_closing of
+                                Nothing => Nothing
+                                Just (ParsedValue closing after_closing) =>
+                                    Just $
+                                        ParsedValue
+                                            (LiteralDomain
+                                                (slice_between
+                                                    source
+                                                    begins
+                                                    (next_octet after_closing))
+                                                Nothing
+                                                opening
+                                                parts
+                                                final_fws
+                                                closing
+                                                Nothing)
+                                            after_closing
+
+read_current_domain_without_cfws : LexerCursor → Maybe (Parsed Domain)
+read_current_domain_without_cfws cursor =
+    case read_dot_atom_without_cfws cursor of
+        Just (ParsedValue dot_atom after) =>
+            Just $
+                ParsedValue
+                    (DotAtomDomain dot_atom)
+                    after
+        Nothing =>
+            case read_domain_literal_without_cfws cursor of
+                Nothing => Nothing
+                Just (ParsedValue literal after) =>
+                    Just $
+                        ParsedValue
+                            (LiteralDomainName literal)
+                            after
+
+-- Current RFC 5322 addr-spec alternatives, excluding only CFWS and section-4
+-- obsolete syntax.  The local-part can be dot-atom or quoted-string; the
+-- domain can be dot-atom or domain-literal.
+read_current_addr_spec_without_cfws : LexerCursor → Maybe (Parsed AddrSpec)
+read_current_addr_spec_without_cfws
+    cursor@(AtMailSource source begins octets) =
+        case read_current_local_part_without_cfws cursor of
+            Nothing => Nothing
+            Just (ParsedValue local_part after_local) =>
+                case read_addr_spec_separator after_local of
+                    Nothing => Nothing
+                    Just (ParsedValue separator after_separator) =>
+                        case read_current_domain_without_cfws
                                  after_separator of
                             Nothing => Nothing
                             Just (ParsedValue domain after_domain) =>
