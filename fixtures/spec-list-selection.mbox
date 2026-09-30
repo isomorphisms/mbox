@@ -1,0 +1,107 @@
+From envelope1@example.org Tue Sep 29 01:00:00 2026
+From: SPEC-LIST <from-list@example.org>
+To: user@example.org
+Message-ID: <from-match@example.org>
+Subject: ordinary
+
+one
+From envelope2@example.org Tue Sep 29 01:01:00 2026
+From: author@example.org
+Sender: SPEC-LIST <sender-list@example.org>
+To: user@example.org
+Message-ID: <sender-match@example.org>
+Subject: ordinary
+
+two
+From envelope3@example.org Tue Sep 29 01:02:00 2026
+From: author@example.org
+Reply-To: people@example.org,
+ SPEC-LIST <reply-list@example.org>
+To: user@example.org
+Message-ID: <reply-fold-match@example.org>
+Subject: ordinary
+
+three
+From envelope4@example.org Tue Sep 29 01:03:00 2026
+From: author@example.org
+To: Someone <SPEC-LIST@example.org>
+Message-ID: <to-match@example.org>
+Subject: ordinary
+
+four
+From envelope5@example.org Tue Sep 29 01:04:00 2026
+From: author@example.org
+To: user@example.org
+Cc: spec-list@example.org
+Message-ID: <cc-match@example.org>
+Subject: ordinary
+
+five
+From envelope6@example.org Tue Sep 29 01:05:00 2026
+From: author@example.org
+To: user@example.org
+Message-ID: <subject-match@example.org>
+Subject: [SPEC-LIST] six
+
+six
+From envelope7@example.org Tue Sep 29 01:06:00 2026
+From: author@example.org
+To: user@example.org
+Message-ID: <case-match@example.org>
+Subject: [sPeC-lIsT] seven
+
+seven
+From envelope8@example.org Tue Sep 29 01:07:00 2026
+From: author@example.org
+To: user@example.org
+Message-ID: <body-only@example.org>
+Subject: ordinary
+
+The body mentions SPEC-LIST, which must not select this message.
+From envelope9@example.org Tue Sep 29 01:08:00 2026
+From: author@example.org
+To: user@example.org
+X-List-Name: SPEC-LIST
+Message-ID: <x-list-only@example.org>
+Subject: ordinary
+
+nine
+From envelope10@example.org Tue Sep 29 01:09:00 2026
+From: author@example.org
+To: user@example.org
+Delivered-To: SPEC-LIST@example.org
+Message-ID: <delivered-only@example.org>
+Subject: ordinary
+
+ten
+From envelope11@example.org Tue Sep 29 01:10:00 2026
+From: author@example.org
+To: user@example.org
+Message-ID: <space-not-hyphen@example.org>
+Subject: SPEC LIST without hyphen
+
+eleven
+From envelope12@example.org Tue Sep 29 01:11:00 2026
+From: author@example.org
+To: user@example.org
+Message-ID: <folded-subject@example.org>
+Subject: ordinary prefix
+ SPEC-LIST on continuation
+
+twelve
+From envelope13@example.org Tue Sep 29 01:12:00 2026
+From: author@example.org
+To: first@example.org
+To: SPEC-LIST@example.org
+Message-ID: <repeated-to@example.org>
+Subject: ordinary
+
+thirteen
+From envelope14@example.org Tue Sep 29 01:13:00 2026
+From: author@example.org
+To: user@example.org
+X-Spec-List: SPEC-LIST
+Message-ID: <wrong-header@example.org>
+Subject: ordinary
+
+fourteen
