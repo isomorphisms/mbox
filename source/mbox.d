@@ -290,8 +290,12 @@ void scanMbox(ref File source, scope void delegate(in MboxRecord) emit)
         const next = position + line.length;
 
         if (startsWithAt(line, 0, "From ")) {
-            if (state != ScanState.beforeFirst)
+            if (state != ScanState.beforeFirst) {
                 finish(lineStart);
+                // The callback may inspect this record by seeking the same
+                // File. Resume after the separator line already read above.
+                source.seek(cast(long) next);
+            }
 
             record = MboxRecord.init;
             record.envelopeRange = ByteRange(lineStart, next);
