@@ -7,7 +7,7 @@ framing.content-length-ignored	PASS	exact LF fixture boundary-event proof
 framing.escaped-from-preserved	PASS	exact LF fixture boundary-event proof
 framing.empty-body	UNIMPLEMENTED	mbox header/body range layer not connected yet
 framing.eof-no-newline	PASS	exact LF fixture boundary-event proof reaches EOF
-streaming.chunk-equivalence	UNIMPLEMENTED	chunking equivalence theorem/test not yet committed
+streaming.chunk-equivalence	PASS	exhaustive two-chunk equivalence at every mboxo-lf.mbox split point
 headers.case-insensitive	UNIMPLEMENTED	mbox header integration incomplete
 headers.fold	UNIMPLEMENTED	mbox header integration incomplete
 headers.repeated	UNIMPLEMENTED	mbox header integration incomplete
