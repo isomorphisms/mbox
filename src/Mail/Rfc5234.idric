@@ -1,0 +1,48 @@
+module Mail.Rfc5234
+
+import Mail.Source
+
+-- RFC 5234 core terminals used by RFC 5322.  Each value identifies the exact
+-- source slice that satisfied the production.
+
+public export
+record Alpha where
+    constructor Alphabetic
+    source : SourceSlice
+
+public export
+record Digit where
+    constructor DecimalDigit
+    source : SourceSlice
+
+public export
+record DQuote where
+    constructor DoubleQuote
+    source : SourceSlice
+
+public export
+data WhiteSpace
+    = Space SourceSlice
+    | HorizontalTab SourceSlice
+
+public export
+record VisibleCharacter where
+    constructor Visible
+    source : SourceSlice
+
+public export
+record CarriageReturn where
+    constructor CR
+    source : SourceSlice
+
+public export
+record LineFeed where
+    constructor LF
+    source : SourceSlice
+
+public export
+record CRLF where
+    constructor InternetLineEnding
+    source : SourceSlice
+    carriage_return : CarriageReturn
+    line_feed : LineFeed

@@ -1,0 +1,76 @@
+module Mail.Source
+
+import Data.Bits
+import Data.List
+import Data.Text
+
+-- This module is the narrow representation boundary.  Domain modules should
+-- carry SourceSlice and protocol-specific semantic values, not Bits8.
+
+public export
+record OctetOffset where
+    constructor AtOctet
+    number : Number
+
+public export
+record OctetRange where
+    constructor Octets
+    start : OctetOffset
+    end : OctetOffset
+
+public export
+record ByteCount where
+    constructor CountBytes
+    number : Number
+
+public export
+record SourceDigest where
+    constructor Digest
+    hexadecimal : Text
+
+public export
+record SourceIdentity where
+    constructor Source
+    byte_count : ByteCount
+    digest : SourceDigest
+
+public export
+record SourceSlice where
+    constructor Slice
+    source : SourceIdentity
+    range : OctetRange
+
+-- Before parsing, the only honest semantic fact about one stored unit is that
+-- it is one octet of this mail source.  Bits8 is hidden behind this boundary.
+export
+record MailSourceOctet where
+    constructor SourceOctet
+    representation : Bits8
+
+export
+source_octet : Bits8 → MailSourceOctet
+source_octet = SourceOctet
+
+export
+same_source_octet : MailSourceOctet → MailSourceOctet → Bool
+same_source_octet (SourceOctet left) (SourceOctet right) = left ≟ right
+
+public export
+record OneOrMore a where
+    constructor OneThen
+    first : a
+    rest : List a
+
+public export
+record Two a where
+    constructor PairOf
+    first : a
+    second : a
+
+public export
+record Four a where
+    constructor FourOf
+    first : a
+    second : a
+    third : a
+    fourth : a

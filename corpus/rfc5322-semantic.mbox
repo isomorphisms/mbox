@@ -1,0 +1,19 @@
+From typed@example.org Wed Sep 30 06:40:00 2026
+Date: Wed, 30 Sep 2026 06:40:00 -0400
+From: "Example, Author" <author@example.org>
+To: Standards Group: alice@example.org, "Bob, B." <bob@example.net>;
+Cc: spec-list@example.org
+Message-ID: <typed.1@example.org>
+Subject: semantic header fixture
+
+body one
+From group@example.org Wed Sep 30 06:41:00 2026
+Date: Wed, 30 Sep 2026 06:41:00 -0400
+From: Automated Sender:;
+Sender: robot@example.org
+To: "Quoted Local" <"local part"@example.org>,
+ user@[127.0.0.1]
+Message-ID: <typed.2@example.org>
+Subject: RFC 6854 and address forms
+
+body two

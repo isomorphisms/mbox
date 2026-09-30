@@ -1,0 +1,13 @@
+# message	field	semantic value
+1	Date	OriginationDateField(DateTime)
+1	From	FromField(FromMailboxes(MailboxList(NameAddress)))
+1	To	ToField(AddressList(Group))
+1	Cc	CcField(AddressList(Mailbox))
+1	Message-ID	MessageIdField(MessageId)
+1	Subject	SubjectField(Unstructured)
+2	Date	OriginationDateField(DateTime)
+2	From	FromField(FromAddresses(AddressList(Group)))
+2	Sender	SenderField(SenderMailbox(Mailbox))
+2	To	ToField(AddressList(Mailbox,Mailbox))
+2	Message-ID	MessageIdField(MessageId)
+2	Subject	SubjectField(Unstructured)

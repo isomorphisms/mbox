@@ -1,0 +1,816 @@
+module Mail.Rfc5322
+
+import Data.List
+import Data.Text
+import Mail.Source
+import Mail.Rfc5234
+
+-- RFC 5322 syntax is represented by named semantic values.  SourceSlice keeps
+-- exact provenance without making raw octets the API.
+
+-- 3.2.1 quoted-pair
+public export
+record ObsoleteQuotedPair where
+    constructor HistoricalQuotedPair
+    source : SourceSlice
+
+public export
+data QuotedPair
+    = CurrentQuotedPair SourceSlice
+    | ObsoleteQuotedPairSyntax ObsoleteQuotedPair
+
+-- 3.2.2 FWS, ctext, ccontent, comment, CFWS
+public export
+record ObsoleteFoldingWhiteSpace where
+    constructor HistoricalFoldingWhiteSpace
+    source : SourceSlice
+
+public export
+record CurrentFoldingWhiteSpace where
+    constructor FoldedWhiteSpace
+    source : SourceSlice
+    leading_white_space : List WhiteSpace
+    fold : Maybe CRLF
+    trailing_white_space : OneOrMore WhiteSpace
+
+public export
+data FoldingWhiteSpace
+    = CurrentFWS CurrentFoldingWhiteSpace
+    | ObsoleteFWS ObsoleteFoldingWhiteSpace
+
+public export
+record ObsoleteNoWhiteSpaceControl where
+    constructor HistoricalNoWhiteSpaceControl
+    source : SourceSlice
+
+public export
+data CommentText
+    = CurrentCommentText SourceSlice
+    | ObsoleteCommentText ObsoleteNoWhiteSpaceControl
+
+public export
+data CommentContent
+    = CommentCharacters CommentText
+    | CommentQuotedPair QuotedPair
+    | NestedComment SourceSlice (List CommentContent)
+
+public export
+record Comment where
+    constructor ParenthesizedComment
+    source : SourceSlice
+    contents : List CommentContent
+
+public export
+data CommentsAndFoldingWhiteSpace
+    = CommentsWithOptionalFWS
+        SourceSlice
+        (OneOrMore (Maybe FoldingWhiteSpace, Comment))
+        (Maybe FoldingWhiteSpace)
+    | FoldingWhiteSpaceOnly FoldingWhiteSpace
+
+-- 3.2.3 atext, atom, dot-atom-text, dot-atom, specials
+public export
+data AtextPunctuation
+    = ExclamationMark
+    | NumberSign
+    | DollarSign
+    | PercentSign
+    | Ampersand
+    | Apostrophe
+    | Asterisk
+    | PlusSign
+    | HyphenMinus
+    | Solidus
+    | EqualsSign
+    | QuestionMark
+    | CircumflexAccent
+    | LowLine
+    | GraveAccent
+    | LeftCurlyBracket
+    | VerticalLine
+    | RightCurlyBracket
+    | Tilde
+
+public export
+data Atext
+    = AtextLetter Alpha
+    | AtextDigit Digit
+    | AtextMark SourceSlice AtextPunctuation
+
+public export
+record Atom where
+    constructor AtomicWord
+    source : SourceSlice
+    before : Maybe CommentsAndFoldingWhiteSpace
+    text : OneOrMore Atext
+    after : Maybe CommentsAndFoldingWhiteSpace
+
+public export
+record AtextRun where
+    constructor RunOfAtext
+    source : SourceSlice
+    characters : OneOrMore Atext
+
+public export
+record DotAtomText where
+    constructor DottedAtext
+    source : SourceSlice
+    first_part : AtextRun
+    later_parts : List AtextRun
+
+public export
+record DotAtom where
+    constructor DottedAtom
+    source : SourceSlice
+    before : Maybe CommentsAndFoldingWhiteSpace
+    text : DotAtomText
+    after : Maybe CommentsAndFoldingWhiteSpace
+
+public export
+data Special
+    = LeftParenthesis SourceSlice
+    | RightParenthesis SourceSlice
+    | LeftAngleBracket SourceSlice
+    | RightAngleBracket SourceSlice
+    | LeftSquareBracket SourceSlice
+    | RightSquareBracket SourceSlice
+    | Colon SourceSlice
+    | Semicolon SourceSlice
+    | AtSign SourceSlice
+    | ReverseSolidus SourceSlice
+    | Comma SourceSlice
+    | FullStop SourceSlice
+    | Quote DQuote
+
+-- 3.2.4 qtext, qcontent, quoted-string
+public export
+data QuotedText
+    = CurrentQuotedText SourceSlice
+    | ObsoleteQuotedText ObsoleteNoWhiteSpaceControl
+
+public export
+data QuotedContent
+    = QuotedCharacters QuotedText
+    | QuotedCharacterPair QuotedPair
+
+public export
+record QuotedStringPart where
+    constructor QuotedPart
+    folding_white_space : Maybe FoldingWhiteSpace
+    content : QuotedContent
+
+public export
+record QuotedString where
+    constructor Quoted
+    source : SourceSlice
+    before : Maybe CommentsAndFoldingWhiteSpace
+    contents : List QuotedStringPart
+    final_folding_white_space : Maybe FoldingWhiteSpace
+    after : Maybe CommentsAndFoldingWhiteSpace
+
+-- 3.2.5 word, phrase, unstructured
+public export
+data Word
+    = AtomWord Atom
+    | QuotedWord QuotedString
+
+public export
+record ObsoletePhrase where
+    constructor HistoricalPhrase
+    source : SourceSlice
+
+public export
+data Phrase
+    = CurrentPhrase SourceSlice (OneOrMore Word)
+    | ObsoletePhraseSyntax ObsoletePhrase
+
+public export
+record ObsoleteUnstructured where
+    constructor HistoricalUnstructured
+    source : SourceSlice
+
+public export
+data Unstructured
+    = CurrentUnstructured SourceSlice
+    | ObsoleteUnstructuredSyntax ObsoleteUnstructured
+
+-- 3.3 date-time
+public export
+data DayName
+    = Monday
+    | Tuesday
+    | Wednesday
+    | Thursday
+    | Friday
+    | Saturday
+    | Sunday
+
+public export
+record DayOfWeek where
+    constructor WeekDay
+    source : SourceSlice
+    name : DayName
+    obsolete_form : Bool
+
+public export
+data OneOrTwoDigits
+    = OneDigit Digit
+    | TwoDigits (Two Digit)
+
+public export
+record Day where
+    constructor DayOfMonth
+    source : SourceSlice
+    digits : OneOrTwoDigits
+    obsolete_form : Bool
+
+public export
+data MonthName
+    = January
+    | February
+    | March
+    | April
+    | May
+    | June
+    | July
+    | August
+    | September
+    | October
+    | November
+    | December
+
+public export
+record Month where
+    constructor CalendarMonth
+    source : SourceSlice
+    name : MonthName
+
+public export
+record Year where
+    constructor CalendarYear
+    source : SourceSlice
+    first_four_digits : Four Digit
+    additional_digits : List Digit
+    obsolete_form : Bool
+
+public export
+record Hour where
+    constructor HourOfDay
+    source : SourceSlice
+    digits : Two Digit
+    obsolete_form : Bool
+
+public export
+record Minute where
+    constructor MinuteOfHour
+    source : SourceSlice
+    digits : Two Digit
+    obsolete_form : Bool
+
+public export
+record Second where
+    constructor SecondOfMinute
+    source : SourceSlice
+    digits : Two Digit
+    obsolete_form : Bool
+
+public export
+record TimeOfDay where
+    constructor ClockTime
+    source : SourceSlice
+    hour : Hour
+    minute : Minute
+    second : Maybe Second
+
+public export
+data ZoneSign = AheadOfUTC | BehindUTC
+
+public export
+data ObsoleteZoneName
+    = UniversalTime
+    | GreenwichMeanTime
+    | EasternStandard
+    | EasternDaylight
+    | CentralStandard
+    | CentralDaylight
+    | MountainStandard
+    | MountainDaylight
+    | PacificStandard
+    | PacificDaylight
+    | MilitaryZone SourceSlice
+
+public export
+data Zone
+    = NumericZone SourceSlice FoldingWhiteSpace ZoneSign (Four Digit)
+    | ObsoleteZone SourceSlice ObsoleteZoneName
+
+public export
+record Time where
+    constructor LocalTimeWithZone
+    source : SourceSlice
+    time_of_day : TimeOfDay
+    zone : Zone
+
+public export
+record Date where
+    constructor CalendarDate
+    source : SourceSlice
+    day : Day
+    month : Month
+    year : Year
+
+public export
+record DateTime where
+    constructor InternetDateTime
+    source : SourceSlice
+    day_of_week : Maybe DayOfWeek
+    date : Date
+    time : Time
+    trailing_comments_or_folding : Maybe CommentsAndFoldingWhiteSpace
+
+-- 3.4 addresses
+public export
+record ObsoleteLocalPart where
+    constructor HistoricalLocalPart
+    source : SourceSlice
+
+public export
+data LocalPart
+    = DotAtomLocalPart DotAtom
+    | QuotedLocalPart QuotedString
+    | ObsoleteLocalPartSyntax ObsoleteLocalPart
+
+public export
+record ObsoleteDomain where
+    constructor HistoricalDomain
+    source : SourceSlice
+
+public export
+record DomainText where
+    constructor DomainLiteralText
+    source : SourceSlice
+    obsolete_form : Bool
+
+public export
+record DomainLiteral where
+    constructor LiteralDomain
+    source : SourceSlice
+    before : Maybe CommentsAndFoldingWhiteSpace
+    contents : List (Maybe FoldingWhiteSpace, DomainText)
+    final_folding_white_space : Maybe FoldingWhiteSpace
+    after : Maybe CommentsAndFoldingWhiteSpace
+
+public export
+data Domain
+    = DotAtomDomain DotAtom
+    | LiteralDomainName DomainLiteral
+    | ObsoleteDomainSyntax ObsoleteDomain
+
+public export
+record AddrSpec where
+    constructor InternetAddressSpecification
+    source : SourceSlice
+    local_part : LocalPart
+    domain : Domain
+
+public export
+record ObsoleteAngleAddress where
+    constructor HistoricalAngleAddress
+    source : SourceSlice
+
+public export
+data AngleAddress
+    = CurrentAngleAddress
+        SourceSlice
+        (Maybe CommentsAndFoldingWhiteSpace)
+        AddrSpec
+        (Maybe CommentsAndFoldingWhiteSpace)
+    | ObsoleteAngleAddressSyntax ObsoleteAngleAddress
+
+public export
+record DisplayName where
+    constructor DisplayedName
+    source : SourceSlice
+    phrase : Phrase
+
+public export
+record NameAddress where
+    constructor NamedAddress
+    source : SourceSlice
+    display_name : Maybe DisplayName
+    angle_address : AngleAddress
+
+public export
+data Mailbox
+    = NamedMailbox NameAddress
+    | BareMailbox AddrSpec
+
+public export
+record ObsoleteMailboxList where
+    constructor HistoricalMailboxList
+    source : SourceSlice
+
+public export
+data MailboxList
+    = CurrentMailboxList SourceSlice (OneOrMore Mailbox)
+    | ObsoleteMailboxListSyntax ObsoleteMailboxList
+
+public export
+record ObsoleteAddressList where
+    constructor HistoricalAddressList
+    source : SourceSlice
+
+public export
+record ObsoleteGroupList where
+    constructor HistoricalGroupList
+    source : SourceSlice
+
+public export
+data GroupList
+    = GroupMailboxes MailboxList
+    | GroupComments CommentsAndFoldingWhiteSpace
+    | ObsoleteGroupListSyntax ObsoleteGroupList
+
+public export
+record Group where
+    constructor AddressGroup
+    source : SourceSlice
+    display_name : DisplayName
+    members : Maybe GroupList
+    after : Maybe CommentsAndFoldingWhiteSpace
+
+public export
+data Address
+    = AddressMailbox Mailbox
+    | AddressGroupValue Group
+
+public export
+data AddressList
+    = CurrentAddressList SourceSlice (OneOrMore Address)
+    | ObsoleteAddressListSyntax ObsoleteAddressList
+
+-- 3.5 message and body
+public export
+record MessageTextCharacter where
+    constructor MessageText
+    source : SourceSlice
+
+public export
+record ObsoleteBody where
+    constructor HistoricalBody
+    source : SourceSlice
+
+public export
+data MessageBody
+    = CurrentBody SourceSlice
+    | ObsoleteBodySyntax ObsoleteBody
+
+-- 3.6.4 message identifiers
+public export
+record ObsoleteIdLeft where
+    constructor HistoricalIdLeft
+    source : SourceSlice
+
+public export
+data IdLeft
+    = CurrentIdLeft DotAtomText
+    | ObsoleteIdLeftSyntax ObsoleteIdLeft
+
+public export
+record NoFoldLiteral where
+    constructor IdentifierLiteral
+    source : SourceSlice
+    contents : List DomainText
+
+public export
+record ObsoleteIdRight where
+    constructor HistoricalIdRight
+    source : SourceSlice
+
+public export
+data IdRight
+    = CurrentIdRight DotAtomText
+    | LiteralIdRight NoFoldLiteral
+    | ObsoleteIdRightSyntax ObsoleteIdRight
+
+public export
+record MessageId where
+    constructor InternetMessageId
+    source : SourceSlice
+    id_left : IdLeft
+    id_right : IdRight
+
+-- 3.6.8 optional fields
+public export
+record FieldText where
+    constructor HeaderFieldText
+    source : SourceSlice
+
+public export
+record FieldName where
+    constructor HeaderFieldName
+    source : SourceSlice
+    characters : OneOrMore FieldText
+
+public export
+record RegistryReference where
+    constructor HeaderRegistryReference
+    reference : Text
+
+public export
+record RegisteredFieldName where
+    constructor RegisteredHeaderFieldName
+    name : FieldName
+    registry_reference : RegistryReference
+
+public export
+data ExtensionFieldName
+    = RegisteredExtension RegisteredFieldName
+    | UnregisteredExtension FieldName
+
+public export
+record OptionalField where
+    constructor ExtensionField
+    source : SourceSlice
+    name : ExtensionFieldName
+    body : Unstructured
+
+-- 3.6 fields
+public export
+record OriginationDateField where
+    constructor DateField
+    source : SourceSlice
+    value : DateTime
+
+-- RFC 6854 updates RFC 5322 From and Sender to permit address/group syntax.
+public export
+data FromValue
+    = FromMailboxes MailboxList
+    | FromAddresses AddressList
+
+public export
+record FromField where
+    constructor AuthorField
+    source : SourceSlice
+    value : FromValue
+
+public export
+data SenderValue
+    = SenderMailbox Mailbox
+    | SenderAddress Address
+
+public export
+record SenderField where
+    constructor TransmitterField
+    source : SourceSlice
+    value : SenderValue
+
+public export
+record ReplyToField where
+    constructor ReplyAddressField
+    source : SourceSlice
+    value : AddressList
+
+public export
+record ToField where
+    constructor PrimaryDestinationField
+    source : SourceSlice
+    value : AddressList
+
+public export
+record CcField where
+    constructor CarbonCopyField
+    source : SourceSlice
+    value : AddressList
+
+public export
+data BlindCarbonCopyValue
+    = BlindCarbonCopyAddresses AddressList
+    | BlindCarbonCopyComments CommentsAndFoldingWhiteSpace
+    | EmptyBlindCarbonCopy
+
+public export
+record BccField where
+    constructor BlindCarbonCopyField
+    source : SourceSlice
+    value : BlindCarbonCopyValue
+
+public export
+record MessageIdField where
+    constructor IdentifierField
+    source : SourceSlice
+    value : MessageId
+
+public export
+record InReplyToField where
+    constructor ReplyIdentifierField
+    source : SourceSlice
+    values : OneOrMore MessageId
+
+public export
+record ReferencesField where
+    constructor ReferenceIdentifiersField
+    source : SourceSlice
+    values : OneOrMore MessageId
+
+public export
+record SubjectField where
+    constructor MessageSubjectField
+    source : SourceSlice
+    value : Unstructured
+
+public export
+record CommentsField where
+    constructor MessageCommentsField
+    source : SourceSlice
+    value : Unstructured
+
+public export
+record KeywordsField where
+    constructor MessageKeywordsField
+    source : SourceSlice
+    values : OneOrMore Phrase
+
+public export
+record ResentDateField where
+    constructor ReintroducedDateField
+    source : SourceSlice
+    value : DateTime
+
+public export
+record ResentFromField where
+    constructor ReintroducedAuthorField
+    source : SourceSlice
+    value : FromValue
+
+public export
+record ResentSenderField where
+    constructor ReintroducedSenderField
+    source : SourceSlice
+    value : SenderValue
+
+public export
+record ResentToField where
+    constructor ReintroducedToField
+    source : SourceSlice
+    value : AddressList
+
+public export
+record ResentCcField where
+    constructor ReintroducedCcField
+    source : SourceSlice
+    value : AddressList
+
+public export
+record ResentBccField where
+    constructor ReintroducedBccField
+    source : SourceSlice
+    value : BlindCarbonCopyValue
+
+public export
+record ResentMessageIdField where
+    constructor ReintroducedMessageIdField
+    source : SourceSlice
+    value : MessageId
+
+public export
+data ReturnPath
+    = ReturnAddress AngleAddress
+    | EmptyReturnPath SourceSlice
+
+public export
+record ReturnPathField where
+    constructor DeliveryReturnPathField
+    source : SourceSlice
+    value : ReturnPath
+
+public export
+data ReceivedToken
+    = ReceivedWord Word
+    | ReceivedAngleAddress AngleAddress
+    | ReceivedAddrSpec AddrSpec
+    | ReceivedDomain Domain
+
+public export
+record ReceivedField where
+    constructor DeliveryTraceField
+    source : SourceSlice
+    tokens : List ReceivedToken
+    date_time : DateTime
+
+public export
+record TraceBlock where
+    constructor DeliveryTrace
+    source : SourceSlice
+    return_path : Maybe ReturnPathField
+    received : OneOrMore ReceivedField
+
+public export
+data ResentField
+    = ResentDate ResentDateField
+    | ResentFrom ResentFromField
+    | ResentSender ResentSenderField
+    | ResentTo ResentToField
+    | ResentCc ResentCcField
+    | ResentBcc ResentBccField
+    | ResentMessageId ResentMessageIdField
+
+public export
+data RegularField
+    = OriginationDate OriginationDateField
+    | From FromField
+    | Sender SenderField
+    | ReplyTo ReplyToField
+    | To ToField
+    | Cc CcField
+    | Bcc BccField
+    | MessageIdentifier MessageIdField
+    | InReplyTo InReplyToField
+    | References ReferencesField
+    | Subject SubjectField
+    | Comments CommentsField
+    | Keywords KeywordsField
+    | Optional OptionalField
+
+public export
+data HeaderField
+    = Trace TraceBlock
+    | Resent ResentField
+    | Regular RegularField
+
+public export
+record HeaderSection where
+    constructor InternetMessageHeaderSection
+    source : SourceSlice
+    fields : List HeaderField
+
+public export
+record Message where
+    constructor InternetMessage
+    source : SourceSlice
+    header_section : HeaderSection
+    body : Maybe MessageBody
+
+-- Section 4 names are kept explicit so recovery never upgrades obsolete
+-- syntax into current syntax invisibly.
+public export
+record ObsoletePhraseList where
+    constructor HistoricalPhraseList
+    source : SourceSlice
+
+public export
+record ObsoleteDayOfWeek where
+    constructor HistoricalDayOfWeek
+    source : SourceSlice
+
+public export
+record ObsoleteDay where
+    constructor HistoricalDay
+    source : SourceSlice
+
+public export
+record ObsoleteYear where
+    constructor HistoricalYear
+    source : SourceSlice
+
+public export
+record ObsoleteHour where
+    constructor HistoricalHour
+    source : SourceSlice
+
+public export
+record ObsoleteMinute where
+    constructor HistoricalMinute
+    source : SourceSlice
+
+public export
+record ObsoleteSecond where
+    constructor HistoricalSecond
+    source : SourceSlice
+
+public export
+record ObsoleteRoute where
+    constructor HistoricalRoute
+    source : SourceSlice
+
+public export
+record ObsoleteDomainList where
+    constructor HistoricalDomainList
+    source : SourceSlice
+
+public export
+record ObsoleteFields where
+    constructor HistoricalFields
+    source : SourceSlice
+
+public export
+record ObsoleteHeaderField where
+    constructor HistoricalHeaderField
+    source : SourceSlice
+
+public export
+record HeaderDefect where
+    constructor Rfc5322Defect
+    source : SourceSlice
+    expected_production : Text
+    observed_context : Text
