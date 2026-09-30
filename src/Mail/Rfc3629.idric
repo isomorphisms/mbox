@@ -1,0 +1,52 @@
+module Mail.Rfc3629
+
+import Data.List
+import Mail.Source
+
+-- RFC 3629 section 4.  The exact octet ranges are validation obligations of
+-- the parser; successful values name which UTF-8 production matched and retain
+-- the exact source slice.
+
+public export
+record Utf8Tail where
+    constructor Utf8Continuation
+    source : SourceSlice
+
+public export
+record Utf8One where
+    constructor Utf8Ascii
+    source : SourceSlice
+
+public export
+record Utf8Two where
+    constructor Utf8TwoOctets
+    source : SourceSlice
+    tail : Utf8Tail
+
+public export
+record Utf8Three where
+    constructor Utf8ThreeOctets
+    source : SourceSlice
+    first_tail : Utf8Tail
+    second_tail : Utf8Tail
+
+public export
+record Utf8Four where
+    constructor Utf8FourOctets
+    source : SourceSlice
+    first_tail : Utf8Tail
+    second_tail : Utf8Tail
+    third_tail : Utf8Tail
+
+public export
+data Utf8Character
+    = OneOctetUtf8 Utf8One
+    | TwoOctetUtf8 Utf8Two
+    | ThreeOctetUtf8 Utf8Three
+    | FourOctetUtf8 Utf8Four
+
+public export
+record Utf8Octets where
+    constructor Utf8Sequence
+    source : SourceSlice
+    characters : List Utf8Character

@@ -4,4 +4,4 @@ version = 0.0.1
 authors = "isomorphisms"
 
 sourcedir = "src"
-modules = Mail.Source, Mail.Rfc5234, Mail.Rfc5322, Mail.Mbox
+modules = Mail.Source, Mail.Rfc5234, Mail.Rfc3629, Mail.Rfc5322, Mail.Rfc6532, Mail.Mbox

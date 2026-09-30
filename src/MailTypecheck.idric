@@ -4,7 +4,9 @@ module MailTypecheck
 
 import Mail.Source
 import Mail.Rfc5234
+import Mail.Rfc3629
 import Mail.Rfc5322
+import Mail.Rfc6532
 import Mail.Mbox
 
 main : IO ()

@@ -1,0 +1,60 @@
+module Mail.Rfc6532
+
+import Mail.Source
+import Mail.Rfc5234
+import Mail.Rfc3629
+import Mail.Rfc5322
+
+-- RFC 6532 is an extension to RFC 5322, not a replacement grammar.  These
+-- types represent exactly the incremental alternatives added by section 3.
+
+public export
+data Utf8NonAscii
+    = NonAsciiTwo Utf8Two
+    | NonAsciiThree Utf8Three
+    | NonAsciiFour Utf8Four
+
+public export
+data InternationalizedVisibleCharacter
+    = AsciiVisibleCharacter VisibleCharacter
+    | Utf8VisibleCharacter Utf8NonAscii
+
+public export
+data InternationalizedCommentText
+    = AsciiCommentText CommentText
+    | Utf8CommentText Utf8NonAscii
+
+public export
+data InternationalizedAtext
+    = AsciiAtext Atext
+    | Utf8Atext Utf8NonAscii
+
+public export
+data InternationalizedQuotedText
+    = AsciiQuotedText QuotedText
+    | Utf8QuotedText Utf8NonAscii
+
+public export
+data InternationalizedMessageText
+    = AsciiMessageText MessageTextCharacter
+    | Utf8MessageText Utf8NonAscii
+
+public export
+data InternationalizedDomainText
+    = AsciiDomainText DomainText
+    | Utf8DomainText Utf8NonAscii
+
+public export
+data HeaderFormat
+    = AsciiInternetMessage
+    | InternationalizedInternetMessage
+
+public export
+record InternationalizedHeaderSection where
+    constructor Utf8HeaderSection
+    source : SourceSlice
+
+public export
+record MessageGlobal where
+    constructor GlobalMessage
+    source : SourceSlice

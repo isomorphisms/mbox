@@ -1,0 +1,8 @@
+# RFC 3629 ABNF production	Idriç type
+UTF8-octets	Utf8Octets
+UTF8-char	Utf8Character
+UTF8-1	Utf8One
+UTF8-2	Utf8Two
+UTF8-3	Utf8Three
+UTF8-4	Utf8Four
+UTF8-tail	Utf8Tail

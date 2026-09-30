@@ -1,0 +1,12 @@
+# RFC 6532 production or incremental alternative	Idriç type
+UTF8-non-ascii	Utf8NonAscii
+UTF8-2	Utf8Two
+UTF8-3	Utf8Three
+UTF8-4	Utf8Four
+VCHAR =/ UTF8-non-ascii	InternationalizedVisibleCharacter
+ctext =/ UTF8-non-ascii	InternationalizedCommentText
+atext =/ UTF8-non-ascii	InternationalizedAtext
+qtext =/ UTF8-non-ascii	InternationalizedQuotedText
+text =/ UTF8-non-ascii	InternationalizedMessageText
+dtext =/ UTF8-non-ascii	InternationalizedDomainText
+message/global	MessageGlobal
