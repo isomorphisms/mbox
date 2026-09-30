@@ -160,42 +160,50 @@ step-envelope f envelope b with is-lf b
       (framer next false [] (just envelope′) (open-message f))
       []
 
--- Consume one octet outside an envelope line.  At a line start, bytes remain
--- undecided only while they are still a prefix of "From ".
+-- Consume one octet outside an envelope line. At a line start, bytes remain
+-- undecided only while they are still a prefix of "From ". Keep the nested
+-- decisions in named helpers: this makes totality visible to Agda instead of
+-- relying on a nested with-clause split whose coverage is easy to misread.
+step-candidate-mismatch : Framer → Byte → FeedResult
+step-candidate-mismatch f b with is-lf b
+... | true =
+  let
+    next = Nat.suc (absolute-offset f)
+  in
+    fed
+      (framer next true [] nothing (extend-range (open-message f) next))
+      []
+... | false =
+  let
+    next = Nat.suc (absolute-offset f)
+  in
+    fed
+      (framer next false [] nothing (extend-range (open-message f) next))
+      []
+
+step-candidate-prefix : Framer → Byte → List Byte → FeedResult
+step-candidate-prefix f b candidate with matches-whole candidate from-prefix
+... | false =
+  let
+    next = Nat.suc (absolute-offset f)
+  in
+    fed
+      (framer next true candidate nothing (extend-range (open-message f) next))
+      []
+... | true =
+  let
+    -- The current octet is the fifth octet in "From ".
+    separator-start = absolute-offset f ∸ 4
+    next = Nat.suc (absolute-offset f)
+  in
+    fed
+      (framer next false [] (just (bytes separator-start next)) nothing)
+      (boundary-events (open-message f) separator-start)
+
 step-candidate : Framer → Byte → List Byte → FeedResult
 step-candidate f b candidate with matches-prefix candidate from-prefix
-... | false with is-lf b
-...   | true =
-    let
-      next = Nat.suc (absolute-offset f)
-    in
-      fed
-        (framer next true [] nothing (extend-range (open-message f) next))
-        []
-...   | false =
-    let
-      next = Nat.suc (absolute-offset f)
-    in
-      fed
-        (framer next false [] nothing (extend-range (open-message f) next))
-        []
-... | true with matches-whole candidate from-prefix
-...   | false =
-    let
-      next = Nat.suc (absolute-offset f)
-    in
-      fed
-        (framer next true candidate nothing (extend-range (open-message f) next))
-        []
-...   | true =
-    let
-      -- The current octet is the fifth octet in "From ".
-      separator-start = absolute-offset f ∸ 4
-      next = Nat.suc (absolute-offset f)
-    in
-      fed
-        (framer next false [] (just (bytes separator-start next)) nothing)
-        (boundary-events (open-message f) separator-start)
+... | false = step-candidate-mismatch f b
+... | true  = step-candidate-prefix f b candidate
 
 step-message : Framer → Byte → FeedResult
 step-message f b with at-line-start f
