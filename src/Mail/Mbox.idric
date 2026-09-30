@@ -187,5 +187,11 @@ finish_framing state =
         Nothing => []
         Just begins => [MessageEnds (next_offset state)]
 
+public export
+frame_octets : List MailSourceOctet → List FramingEvent
+frame_octets octets =
+    case feed_octets initial_framer octets of
+        Fed final_state events => events ++ finish_framing final_state
+
 -- Header parsing descends through Mail.Rfc5322.  The container layer only
 -- establishes exact source ranges and storage-specific tolerances.
