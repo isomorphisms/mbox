@@ -1,0 +1,51 @@
+name: Cross-language mailbox matrix
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "fixtures/**"
+      - "tests/conformance/**"
+      - "CONTRACT.md"
+      - ".github/workflows/cross-language-conformance.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  matrix:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out exact main revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Fetch language branch receipts
+        shell: bash
+        run: |
+          set -euxo pipefail
+          git fetch --no-tags origin \
+            "D:refs/remotes/origin/D" \
+            "Agda:refs/remotes/origin/Agda" \
+            "Grease:refs/remotes/origin/Grease" \
+            "Idriç:refs/remotes/origin/Idriç" \
+            "Idris:refs/remotes/origin/Idris"
+
+      - name: Compare enforced language receipts
+        shell: bash
+        run: |
+          set -euo pipefail
+          sh tests/conformance/compare-branches.sh | tee /tmp/mbox-language-matrix.tsv
+          {
+            echo '### Mailbox cross-language conformance'
+            echo
+            echo 'Statuses are branch-declared and enforced by each branch CI.'
+            echo
+            echo '~~~text'
+            cat /tmp/mbox-language-matrix.tsv
+            echo '~~~'
+          } >> "$GITHUB_STEP_SUMMARY"
