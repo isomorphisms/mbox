@@ -1,0 +1,4 @@
+# order<TAB>subject<TAB>recipient addr-specs<TAB>selected-for-spec-list
+1	first	spec-list@example.org	yes
+2	folded recipients	person@example.org,spec-list@example.org,other@example.org	yes
+3	leave here	nobody@example.org	no
