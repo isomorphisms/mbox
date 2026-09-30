@@ -1,0 +1,4 @@
+# file	canonical URL	role
+message-headers.xml	https://www.iana.org/assignments/message-headers/message-headers.xml	current message header registries
+media-types.xml	https://www.iana.org/assignments/media-types/media-types.xml	current media type registry
+email-auth.xml	https://www.iana.org/assignments/email-auth/email-auth.xml	current Authentication-Results method/property registries

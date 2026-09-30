@@ -1,0 +1,37 @@
+name: mirror mail standards
+
+on:
+  push:
+    branches:
+      - "Idriç"
+    paths:
+      - "standards/SOURCES.tsv"
+      - "standards/DRAFT_SOURCES.tsv"
+      - "standards/IANA_SOURCES.tsv"
+      - "tools/sync-rfcs"
+      - ".github/workflows/mirror-mail-standards.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch canonical standards copies
+        run: ./tools/sync-rfcs
+
+      - name: Commit mirrors when changed
+        shell: bash
+        run: |
+          git add standards/rfc standards/drafts standards/iana
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Mirror mail standards"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

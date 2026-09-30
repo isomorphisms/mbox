@@ -1,0 +1,33 @@
+#!/bin/sh
+set -eu
+
+repo_root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+cd "$repo_root"
+
+mkdir -p standards/rfc standards/drafts standards/iana
+
+sync_table() {
+    table=$1
+    destination=$2
+
+    while IFS="$(printf '\t')" read -r file url rest
+    do
+        case "$file" in
+            ''|'#'*) continue ;;
+        esac
+
+        tmp="$destination/.$file.tmp"
+        out="$destination/$file"
+
+        curl --fail --location --silent --show-error \
+             --proto '=https' --tlsv1.2 \
+             "$url" > "$tmp"
+
+        test -s "$tmp"
+        mv "$tmp" "$out"
+    done < "$table"
+}
+
+sync_table standards/SOURCES.tsv standards/rfc
+sync_table standards/DRAFT_SOURCES.tsv standards/drafts
+sync_table standards/IANA_SOURCES.tsv standards/iana

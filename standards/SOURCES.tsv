@@ -1,0 +1,40 @@
+# file	canonical URL	role
+rfc2119.txt	https://www.rfc-editor.org/rfc/rfc2119.txt	BCP 14 requirement words
+rfc8174.txt	https://www.rfc-editor.org/rfc/rfc8174.txt	BCP 14 uppercase/lowercase clarification
+rfc5234.txt	https://www.rfc-editor.org/rfc/rfc5234.txt	ABNF
+rfc7405.txt	https://www.rfc-editor.org/rfc/rfc7405.txt	ABNF case-sensitive strings
+rfc4155.txt	https://www.rfc-editor.org/rfc/rfc4155.txt	application/mbox
+rfc5321.txt	https://www.rfc-editor.org/rfc/rfc5321.txt	SMTP trace and envelope semantics used by message fields
+rfc5322.txt	https://www.rfc-editor.org/rfc/rfc5322.txt	Internet Message Format
+rfc6854.txt	https://www.rfc-editor.org/rfc/rfc6854.txt	RFC 5322 originator-field update
+rfc2045.txt	https://www.rfc-editor.org/rfc/rfc2045.txt	MIME part 1
+rfc2046.txt	https://www.rfc-editor.org/rfc/rfc2046.txt	MIME part 2
+rfc2047.txt	https://www.rfc-editor.org/rfc/rfc2047.txt	encoded words in message header fields
+rfc2049.txt	https://www.rfc-editor.org/rfc/rfc2049.txt	MIME conformance and examples
+rfc2183.txt	https://www.rfc-editor.org/rfc/rfc2183.txt	Content-Disposition
+rfc2231.txt	https://www.rfc-editor.org/rfc/rfc2231.txt	MIME parameters, charsets, languages, continuations
+rfc2392.txt	https://www.rfc-editor.org/rfc/rfc2392.txt	Content-ID and Message-ID URLs
+rfc2557.txt	https://www.rfc-editor.org/rfc/rfc2557.txt	MIME encapsulation and Content-Location
+rfc3282.txt	https://www.rfc-editor.org/rfc/rfc3282.txt	Content-Language
+rfc6838.txt	https://www.rfc-editor.org/rfc/rfc6838.txt	media type specification and registration
+rfc3864.txt	https://www.rfc-editor.org/rfc/rfc3864.txt	message header field registration
+rfc4021.txt	https://www.rfc-editor.org/rfc/rfc4021.txt	initial mail and MIME header registrations
+rfc2369.txt	https://www.rfc-editor.org/rfc/rfc2369.txt	List-* command header fields
+rfc2919.txt	https://www.rfc-editor.org/rfc/rfc2919.txt	List-Id
+rfc8058.txt	https://www.rfc-editor.org/rfc/rfc8058.txt	one-click List-Unsubscribe
+rfc3834.txt	https://www.rfc-editor.org/rfc/rfc3834.txt	Auto-Submitted and automatic responses
+rfc5064.txt	https://www.rfc-editor.org/rfc/rfc5064.txt	Archived-At
+rfc6376.txt	https://www.rfc-editor.org/rfc/rfc6376.txt	DKIM-Signature
+rfc7208.txt	https://www.rfc-editor.org/rfc/rfc7208.txt	SPF and Received-SPF
+rfc8601.txt	https://www.rfc-editor.org/rfc/rfc8601.txt	Authentication-Results
+rfc8617.txt	https://www.rfc-editor.org/rfc/rfc8617.txt	ARC header fields
+rfc6648.txt	https://www.rfc-editor.org/rfc/rfc6648.txt	deprecation of X- prefixes
+rfc6530.txt	https://www.rfc-editor.org/rfc/rfc6530.txt	internationalized email overview
+rfc6531.txt	https://www.rfc-editor.org/rfc/rfc6531.txt	SMTPUTF8
+rfc6532.txt	https://www.rfc-editor.org/rfc/rfc6532.txt	internationalized email headers
+rfc6533.txt	https://www.rfc-editor.org/rfc/rfc6533.txt	internationalized delivery-status and disposition notifications
+rfc6857.txt	https://www.rfc-editor.org/rfc/rfc6857.txt	downgrading mechanism for internationalized email
+rfc8098.txt	https://www.rfc-editor.org/rfc/rfc8098.txt	message disposition notifications
+rfc3464.txt	https://www.rfc-editor.org/rfc/rfc3464.txt	delivery status notifications
+rfc8255.txt	https://www.rfc-editor.org/rfc/rfc8255.txt	Content-Translation-Type
+rfc9788.txt	https://www.rfc-editor.org/rfc/rfc9788.txt	protected headers for cryptographic email
