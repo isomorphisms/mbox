@@ -77,7 +77,56 @@ jobs:
             idric/_/libs/test/build
           key: idric-linux-51e3892d4de59943e42e65c60a9814aba792c5d4-v1
 
+      - name: Verify shared fixture bytes first
+        working-directory: mbox
+        run: sh tests/shared-fixtures.sh
+
       - name: Typecheck RFC-shaped mail modules
         run: |
-          ./idric/edric --emit-one-step             mbox/src/MailTypecheck.idric             -o mbox/idric-mail.one-step
+          ./idric/edric --emit-one-step mbox/src/MailTypecheck.idric -o mbox/idric-mail.one-step
           grep -F "$(printf 'core_typecheck\tPASS')" mbox/idric-mail.one-step
+
+      - name: Generate framing proofs from exact shared fixture bytes
+        run: |
+          python3 mbox/test/generate_idric_fixture_conformance.py > mbox/src/MboxFixtureTypecheck.idric
+          ./idric/edric --emit-one-step mbox/src/MboxFixtureTypecheck.idric -o mbox/idric-fixtures.one-step
+          grep -F "$(printf 'core_typecheck\tPASS')" mbox/idric-fixtures.one-step
+
+      - name: Emit normalized Idriç receipt
+        working-directory: mbox
+        run: |
+          cat > tests/conformance/receipt.tsv <<'EOF'
+          fixture.checksums	PASS	shared fixture checksum gate
+          framing.empty	PASS	Idriç proof generated from empty.mbox bytes
+          framing.lf-ranges	UNIMPLEMENTED	current framer exposes entry boundaries, not envelope-line end ranges
+          framing.crlf-ranges	UNIMPLEMENTED	current framer exposes entry boundaries, not envelope-line end ranges
+          framing.unescaped-from-splits	PASS	exact fixture boundary-event proof
+          framing.content-length-ignored	PASS	exact LF fixture boundary-event proof
+          framing.escaped-from-preserved	PASS	exact LF fixture boundary-event proof
+          framing.empty-body	UNIMPLEMENTED	mbox header/body range layer not connected yet
+          framing.eof-no-newline	PASS	exact LF fixture boundary-event proof reaches EOF
+          streaming.chunk-equivalence	UNIMPLEMENTED	chunking equivalence theorem/test not yet committed
+          headers.case-insensitive	UNIMPLEMENTED	mbox header integration incomplete
+          headers.fold	UNIMPLEMENTED	mbox header integration incomplete
+          headers.repeated	UNIMPLEMENTED	mbox header integration incomplete
+          headers.empty-value	UNIMPLEMENTED	mbox header integration incomplete
+          headers.colon-in-value	UNIMPLEMENTED	mbox header integration incomplete
+          headers.malformed-preserved	UNIMPLEMENTED	mbox header integration incomplete
+          headers.raw-byte-preservation	UNIMPLEMENTED	mbox header integration incomplete
+          addresses.bare-and-display	UNIMPLEMENTED	address view not wired to mbox fixtures
+          addresses.quoted-comma	UNIMPLEMENTED	address view not wired to mbox fixtures
+          addresses.folded-repeated	UNIMPLEMENTED	address view not wired to mbox fixtures
+          selection.spec-list-positive	UNIMPLEMENTED	refiler selection not implemented
+          selection.body-only-negative	UNIMPLEMENTED	refiler selection not implemented
+          selection.wrong-header-negative	UNIMPLEMENTED	refiler selection not implemented
+          copy.byte-identical	UNIMPLEMENTED	copy command not implemented
+          copy.multiplicity	UNIMPLEMENTED	copy command not implemented
+          transaction.ordinary	UNIMPLEMENTED	destructive refiler not implemented
+          transaction.prepared	UNIMPLEMENTED	transaction journal not implemented
+          transaction.mid-archive	UNIMPLEMENTED	transaction journal not implemented
+          transaction.archive-fsynced	UNIMPLEMENTED	transaction journal not implemented
+          transaction.new-source-tail	UNIMPLEMENTED	transaction journal not implemented
+          transaction.mutated-prefix-refuse	UNIMPLEMENTED	transaction journal not implemented
+          EOF
+          cat tests/conformance/receipt.tsv
+          sh tests/conformance/check-receipt.sh tests/conformance/cases.tsv tests/conformance/receipt.tsv
