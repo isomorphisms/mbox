@@ -1,0 +1,31 @@
+fixture.checksums	PASS	shared fixture checksum gate
+framing.empty	UNIMPLEMENTED	incremental feed function not implemented
+framing.lf-ranges	UNIMPLEMENTED	incremental feed function not implemented
+framing.crlf-ranges	UNIMPLEMENTED	incremental feed function not implemented
+framing.unescaped-from-splits	UNIMPLEMENTED	incremental feed function not implemented
+framing.content-length-ignored	UNIMPLEMENTED	incremental feed function not implemented
+framing.escaped-from-preserved	UNIMPLEMENTED	incremental feed function not implemented
+framing.empty-body	UNIMPLEMENTED	header/body parser not implemented
+framing.eof-no-newline	UNIMPLEMENTED	incremental feed function not implemented
+streaming.chunk-equivalence	UNIMPLEMENTED	incremental feed function not implemented
+headers.case-insensitive	UNIMPLEMENTED	header parser not implemented
+headers.fold	UNIMPLEMENTED	header parser not implemented
+headers.repeated	UNIMPLEMENTED	header parser not implemented
+headers.empty-value	UNIMPLEMENTED	header parser not implemented
+headers.colon-in-value	UNIMPLEMENTED	header parser not implemented
+headers.malformed-preserved	UNIMPLEMENTED	header parser not implemented
+headers.raw-byte-preservation	UNIMPLEMENTED	header parser not implemented
+addresses.bare-and-display	UNIMPLEMENTED	address parser not implemented
+addresses.quoted-comma	UNIMPLEMENTED	address parser not implemented
+addresses.folded-repeated	UNIMPLEMENTED	address parser not implemented
+selection.spec-list-positive	UNIMPLEMENTED	refiler selection not implemented
+selection.body-only-negative	UNIMPLEMENTED	refiler selection not implemented
+selection.wrong-header-negative	UNIMPLEMENTED	refiler selection not implemented
+copy.byte-identical	UNIMPLEMENTED	copy layer not implemented
+copy.multiplicity	UNIMPLEMENTED	copy layer not implemented
+transaction.ordinary	UNIMPLEMENTED	destructive refiler not implemented
+transaction.prepared	UNIMPLEMENTED	transaction journal not implemented
+transaction.mid-archive	UNIMPLEMENTED	transaction journal not implemented
+transaction.archive-fsynced	UNIMPLEMENTED	transaction journal not implemented
+transaction.new-source-tail	UNIMPLEMENTED	transaction journal not implemented
+transaction.mutated-prefix-refuse	UNIMPLEMENTED	transaction journal not implemented
