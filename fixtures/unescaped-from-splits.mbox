@@ -1,0 +1,10 @@
+From first@example.org Tue Sep 29 08:00:00 2026
+From: first@example.org
+To: user@example.org
+Message-ID: <split-one@example.org>
+Subject: first
+
+body before
+From not-a-real-sender but mboxo still frames here
+this line is not a valid RFC header
+still part of the second entry
