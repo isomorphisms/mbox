@@ -1,0 +1,205 @@
+module Mail.Mbox
+
+import Data.Bits
+import Data.List
+import Data.Text
+
+-- Raw mailbox data is octets.  The representation stays behind this semantic
+-- name so message framing cannot accidentally become text decoding.
+MailByte : Type
+MailByte = Bits8
+
+record ByteOffset where
+    constructor Offset
+    number : Number
+
+record ByteRange where
+    constructor Bytes
+    start : ByteOffset
+    end   : ByteOffset
+
+record RawHeaderField where
+    constructor HeaderField
+    raw_range : ByteRange
+    name_range : ByteRange
+    name_bytes : List MailByte
+    unfolded_value : List MailByte
+    malformed : Bool
+
+record MessageView where
+    constructor Message
+    envelope_range : ByteRange
+    message_range : ByteRange
+    header_range : ByteRange
+    body_range : ByteRange
+    headers : List RawHeaderField
+
+record Address where
+    constructor Mailbox
+    display_name : List MailByte
+    address_specification : List MailByte
+
+record SourceIdentity where
+    constructor Source
+    byte_count : Number
+    digest : List MailByte
+
+record MboxCursor where
+    constructor Cursor
+    source : SourceIdentity
+    next_byte : ByteOffset
+
+record EnvelopeCandidate where
+    constructor Candidate
+    begins_at : ByteOffset
+    remaining_prefix : List MailByte
+
+data FramingEvent
+    = EnvelopeBegins ByteOffset
+    | MessageEnds ByteOffset
+
+record FramerState where
+    constructor Framer
+    next_offset : ByteOffset
+    at_line_start : Bool
+    envelope_candidate : Maybe EnvelopeCandidate
+    open_entry : Maybe ByteOffset
+
+record FeedResult where
+    constructor Fed
+    state : FramerState
+    events : List FramingEvent
+
+-- ASCII LF.  mbox framing is byte based; CR is ordinary data until header
+-- parsing interprets CRLF.
+line_feed : MailByte
+line_feed = 10
+
+-- ASCII "From ".  A legal mboxo envelope candidate begins with these five
+-- octets at the start of a line.
+from_prefix : List MailByte
+from_prefix = [70, 114, 111, 109, 32]
+
+first_from_byte : MailByte
+first_from_byte = 70
+
+zero_offset : ByteOffset
+zero_offset = Offset 0
+
+advance : ByteOffset → ByteOffset
+advance (Offset n) = Offset (n + 1)
+
+same_byte : MailByte → MailByte → Bool
+same_byte left right = left ≟ right
+
+is_line_feed : MailByte → Bool
+is_line_feed byte = same_byte byte line_feed
+
+initial_framer : FramerState
+initial_framer = Framer zero_offset True Nothing Nothing
+
+events_for_new_envelope : Maybe ByteOffset → ByteOffset → List FramingEvent
+events_for_new_envelope Nothing begins_at =
+    [EnvelopeBegins begins_at]
+events_for_new_envelope (Just previous) begins_at =
+    [MessageEnds begins_at, EnvelopeBegins begins_at]
+
+continue_candidate :
+    FramerState →
+    EnvelopeCandidate →
+    MailByte →
+    FeedResult
+continue_candidate
+    (Framer offset line_start candidate open)
+    (Candidate begins [])
+    byte =
+        Fed
+            (Framer (advance offset) (is_line_feed byte) Nothing open)
+            []
+continue_candidate
+    (Framer offset line_start candidate open)
+    (Candidate begins (expected :: remaining))
+    byte =
+        if same_byte byte expected
+           then
+               case remaining of
+                   [] =>
+                       Fed
+                           (Framer
+                               (advance offset)
+                               False
+                               Nothing
+                               (Just begins))
+                           (events_for_new_envelope open begins)
+                   _ =>
+                       Fed
+                           (Framer
+                               (advance offset)
+                               False
+                               (Just (Candidate begins remaining))
+                               open)
+                           []
+           else
+               Fed
+                   (Framer
+                       (advance offset)
+                       (is_line_feed byte)
+                       Nothing
+                       open)
+                   []
+
+start_or_skip :
+    FramerState →
+    MailByte →
+    FeedResult
+start_or_skip
+    (Framer offset line_start candidate open)
+    byte =
+        if line_start && same_byte byte first_from_byte
+           then
+               Fed
+                   (Framer
+                       (advance offset)
+                       False
+                       (Just (Candidate offset [114, 111, 109, 32]))
+                       open)
+                   []
+           else
+               Fed
+                   (Framer
+                       (advance offset)
+                       (is_line_feed byte)
+                       Nothing
+                       open)
+                   []
+
+feed_byte : FramerState → MailByte → FeedResult
+feed_byte state byte =
+    case envelope_candidate state of
+        Nothing => start_or_skip state byte
+        Just candidate => continue_candidate state candidate byte
+
+feed_bytes : FramerState → List MailByte → FeedResult
+feed_bytes state [] = Fed state []
+feed_bytes state (byte :: rest) =
+    let first = feed_byte state byte
+        later = feed_bytes (state first) rest
+    in Fed (state later) (events first ++ events later)
+
+-- End-of-input closes the currently open entry.  A partial "From " candidate
+-- is data, not a separator.
+finish_framing : FramerState → List FramingEvent
+finish_framing state =
+    case open_entry state of
+        Nothing => []
+        Just begins => [MessageEnds (next_offset state)]
+
+-- The standard-bearer path intentionally descends in layers:
+--
+--     frame mailbox bytes
+--     parse header bytes from each message range
+--     view recipient addresses from selected header fields
+--     copy original message bytes to the destination mailbox
+--
+-- MIME decoding, text decoding, and rewriting are below/after framing and
+-- cannot redefine message boundaries.
