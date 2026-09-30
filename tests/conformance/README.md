@@ -33,3 +33,21 @@ belongs on `main` so every other language inherits it.
 
 The transaction cases are intentionally allowed to be red while journal/recovery
 work is incomplete. Do not weaken them to make an implementation green.
+
+
+## Comparing languages
+
+`compare-receipts.sh` takes two or more normalized receipts and prints one
+status matrix by shared case ID. For example:
+
+```sh
+sh tests/conformance/compare-receipts.sh \
+    D=/tmp/D.tsv \
+    Agda=/tmp/Agda.tsv \
+    Grease=/tmp/Grease.tsv
+```
+
+A `PASS` beside `UNIMPLEMENTED` is a capability difference, not a semantic
+disagreement. `BLOCKED` means the maintained execution path could not run the
+implemented behavior. Any `FAIL` makes the comparator fail: that is the signal
+that the implementations and shared contract/fixtures need to teach each other.
