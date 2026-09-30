@@ -26,6 +26,23 @@ record WhiteSpaceScan where
     values : List WhiteSpace
     after : LexerCursor
 
+record FieldTextScan where
+    constructor ScannedFieldText
+    values : List FieldText
+    after : LexerCursor
+
+public export
+record HeaderFieldSeparator where
+    constructor SeparatesHeaderFieldName
+    source : SourceSlice
+
+public export
+record HeaderFieldPrefix where
+    constructor BeginsHeaderField
+    source : SourceSlice
+    name : FieldName
+    separator : HeaderFieldSeparator
+
 space_octet : MailSourceOctet
 space_octet = source_octet 32
 
@@ -37,6 +54,9 @@ carriage_return_octet = source_octet 13
 
 line_feed_octet : MailSourceOctet
 line_feed_octet = source_octet 10
+
+colon_octet : MailSourceOctet
+colon_octet = source_octet 58
 
 advance_offset : OctetOffset → OctetOffset
 advance_offset (AtOctet n) = AtOctet (n + 1)
@@ -177,3 +197,79 @@ read_current_folding_white_space cursor@(AtMailSource source begins octets) =
                                     (next_octet after))
                                 run)
                         after
+
+
+field_text_at : SourceIdentity → OctetOffset → MailSourceOctet → Maybe FieldText
+field_text_at source offset octet =
+    if source_octet_is_ascii_visible octet
+       && not (same_source_octet octet colon_octet)
+       then Just (HeaderFieldText (single_octet_slice source offset))
+       else Nothing
+
+scan_field_text_from : SourceIdentity → OctetOffset → List MailSourceOctet → List FieldText → FieldTextScan
+scan_field_text_from source offset [] accumulated =
+    ScannedFieldText
+        (reverse accumulated)
+        (AtMailSource source offset [])
+scan_field_text_from source offset all_octets@(octet :: rest) accumulated =
+    case field_text_at source offset octet of
+        Nothing =>
+            ScannedFieldText
+                (reverse accumulated)
+                (AtMailSource source offset all_octets)
+        Just field_text =>
+            scan_field_text_from
+                source
+                (advance_offset offset)
+                rest
+                (field_text :: accumulated)
+
+read_field_name : LexerCursor → Maybe (Parsed FieldName)
+read_field_name cursor@(AtMailSource source begins octets) =
+    case scan_field_text_from source begins octets [] of
+        ScannedFieldText values after =>
+            case as_one_or_more values of
+                Nothing => Nothing
+                Just characters =>
+                    Just $
+                        ParsedValue
+                            (HeaderFieldName
+                                (slice_between
+                                    source
+                                    begins
+                                    (next_octet after))
+                                characters)
+                            after
+
+read_header_field_separator : LexerCursor → Maybe (Parsed HeaderFieldSeparator)
+read_header_field_separator
+    (AtMailSource source begins (octet :: rest)) =
+        if same_source_octet octet colon_octet
+           then
+               let ends = advance_offset begins
+               in Just $
+                    ParsedValue
+                        (SeparatesHeaderFieldName
+                            (slice_between source begins ends))
+                        (AtMailSource source ends rest)
+           else Nothing
+read_header_field_separator _ = Nothing
+
+read_header_field_prefix : LexerCursor → Maybe (Parsed HeaderFieldPrefix)
+read_header_field_prefix cursor@(AtMailSource source begins octets) =
+    case read_field_name cursor of
+        Nothing => Nothing
+        Just (ParsedValue name after_name) =>
+            case read_header_field_separator after_name of
+                Nothing => Nothing
+                Just (ParsedValue separator after_separator) =>
+                    Just $
+                        ParsedValue
+                            (BeginsHeaderField
+                                (slice_between
+                                    source
+                                    begins
+                                    (next_octet after_separator))
+                                name
+                                separator)
+                            after_separator

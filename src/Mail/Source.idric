@@ -59,6 +59,29 @@ export
 same_source_octet : MailSourceOctet → MailSourceOctet → Bool
 same_source_octet (SourceOctet left) (SourceOctet right) = left ≟ right
 
+source_octet_code : MailSourceOctet → Integer
+source_octet_code (SourceOctet octet) = cast octet
+
+-- These questions live at the representation boundary.  Callers use them only
+-- to refine an undecided source octet into a semantic RFC terminal.
+export
+source_octet_is_ascii_visible : MailSourceOctet → Bool
+source_octet_is_ascii_visible octet =
+    let code = source_octet_code octet
+    in code >= 33 && code <= 126
+
+export
+source_octet_is_ascii_letter : MailSourceOctet → Bool
+source_octet_is_ascii_letter octet =
+    let code = source_octet_code octet
+    in (code >= 65 && code <= 90) || (code >= 97 && code <= 122)
+
+export
+source_octet_is_ascii_digit : MailSourceOctet → Bool
+source_octet_is_ascii_digit octet =
+    let code = source_octet_code octet
+    in code >= 48 && code <= 57
+
 public export
 record OneOrMore a where
     constructor OneThen
