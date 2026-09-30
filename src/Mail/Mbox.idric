@@ -20,14 +20,18 @@ data StoredLineEnding
     | BareLineFeedAcceptedByMbox LineFeed
 
 public export
+data StoredHeaderMaterial
+    = ParsedHeaderField HeaderField
+    | DefectiveHeaderMaterial SourceSlice (OneOrMore HeaderDefect)
+
+public export
 record MessageView where
     constructor Message
     envelope : SourceSlice
     message : SourceSlice
     header_section : SourceSlice
     body : SourceSlice
-    headers : List HeaderField
-    defects : List HeaderDefect
+    headers : List StoredHeaderMaterial
 
 public export
 record MboxCursor where
