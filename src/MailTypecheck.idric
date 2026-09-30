@@ -1,5 +1,7 @@
 module MailTypecheck
 
+-- Compilation canary for the RFC-shaped mail module graph.
+
 import Mail.Source
 import Mail.Rfc5234
 import Mail.Rfc5322
