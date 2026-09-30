@@ -1,0 +1,191 @@
+#!/usr/bin/env ysh
+
+source source/mbox.grease
+
+func has_spec(value) {
+  return (ascii_lower(value).contains('spec-list'))
+}
+
+func message_matches_spec(message) {
+  for field in (message.headers) {
+    if (field.malformed) {
+      continue
+    }
+
+    if (field.name === 'from') {
+      if (has_spec(field.unfolded_value)) { return (true) }
+      continue
+    }
+    if (field.name === 'sender') {
+      if (has_spec(field.unfolded_value)) { return (true) }
+      continue
+    }
+    if (field.name === 'reply-to') {
+      if (has_spec(field.unfolded_value)) { return (true) }
+      continue
+    }
+    if (field.name === 'to') {
+      if (has_spec(field.unfolded_value)) { return (true) }
+      continue
+    }
+    if (field.name === 'cc') {
+      if (has_spec(field.unfolded_value)) { return (true) }
+      continue
+    }
+    if (field.name === 'subject') {
+      if (has_spec(field.unfolded_value)) { return (true) }
+    }
+  }
+  return (false)
+}
+
+var empty = read_mbox('fixtures/empty.mbox')
+assert [len(empty.messages) === 0]
+printf '%s\t%s\t%s\n' 'framing.empty' 'PASS' 'empty.mbox has zero entries'
+
+var lf = read_mbox('fixtures/mboxo-lf.mbox')
+assert [len(lf.messages) === 3]
+assert [lf.messages[0].envelope_range.start === 0]
+assert [lf.messages[0].envelope_range.end === 46]
+assert [lf.messages[0].message_range.start === 46]
+assert [lf.messages[0].message_range.end === 250]
+assert [lf.messages[1].envelope_range.start === 250]
+assert [lf.messages[1].message_range.end === 396]
+assert [lf.messages[2].envelope_range.start === 396]
+assert [lf.messages[2].message_range.end === 568]
+printf '%s\t%s\t%s\n' 'framing.lf-ranges' 'PASS' 'manifest ranges'
+
+var crlf = read_mbox('fixtures/mboxo-crlf.mbox')
+assert [len(crlf.messages) === 2]
+assert [crlf.messages[0].envelope_range.start === 0]
+assert [crlf.messages[0].envelope_range.end === 49]
+assert [crlf.messages[0].message_range.end === 178]
+assert [crlf.messages[1].envelope_range.start === 178]
+assert [crlf.messages[1].message_range.start === 227]
+assert [crlf.messages[1].message_range.end === 333]
+printf '%s\t%s\t%s\n' 'framing.crlf-ranges' 'PASS' 'manifest CRLF ranges'
+
+var split = read_mbox('fixtures/unescaped-from-splits.mbox')
+assert [len(split.messages) === 2]
+assert [split.messages[0].message_range.end === 157]
+assert [split.messages[1].envelope_range.start === 157]
+printf '%s\t%s\t%s\n' 'framing.unescaped-from-splits' 'PASS' 'line-leading From splits entry'
+
+assert [len(lf.messages) === 3]
+printf '%s\t%s\t%s\n' 'framing.content-length-ignored' 'PASS' 'lying Content-Length did not change framing'
+
+var first_body = range_bytes(lf.bytes, lf.messages[0].body_range)
+assert [first_body.contains('>From ')]
+assert [first_body.contains('>>From ')]
+printf '%s\t%s\t%s\n' 'framing.escaped-from-preserved' 'PASS' '>From and >>From preserved'
+
+assert [range_bytes(lf.bytes, lf.messages[1].body_range) === '']
+printf '%s\t%s\t%s\n' 'framing.empty-body' 'PASS' 'second LF message body empty'
+
+var last_entry = entry_bytes(lf.bytes, lf.messages[2])
+assert [last_entry[-1] !== b'\y0a']
+printf '%s\t%s\t%s\n' 'framing.eof-no-newline' 'PASS' 'final entry ends at EOF'
+
+printf '%s\t%s\t%s\n' 'streaming.chunk-equivalence' 'UNIMPLEMENTED' 'Grease parser is whole-buffer today'
+
+var hc = read_mbox('fixtures/header-corners.mbox')
+assert [len(hc.messages) === 4]
+var h0 = hc.messages[0]
+
+assert [header_values(h0, 'SUBJECT') === ['folded with spaces and tab']]
+printf '%s\t%s\t%s\n' 'headers.case-insensitive' 'PASS' 'SUBJECT lookup matches mixed-case source field'
+printf '%s\t%s\t%s\n' 'headers.fold' 'PASS' 'folded subject unfolds to manifest value'
+
+assert [len(header_values(h0, 'to')) === 2]
+assert [len(header_values(h0, 'cc')) === 2]
+printf '%s\t%s\t%s\n' 'headers.repeated' 'PASS' 'repeated To and Cc retained'
+
+assert [header_values(h0, 'x-empty') === ['']]
+printf '%s\t%s\t%s\n' 'headers.empty-value' 'PASS' 'empty field value retained'
+
+assert [header_values(h0, 'x-colon') === ['left:right:still-value']]
+printf '%s\t%s\t%s\n' 'headers.colon-in-value' 'PASS' 'colon remains in field value'
+
+var malformed = null
+for field in (hc.messages[1].headers) {
+  if (field.malformed) {
+    setvar malformed = field
+    break
+  }
+}
+assert [malformed !== null]
+assert [header_raw_bytes(hc.bytes, malformed) === b'Broken header line without colon\y0a']
+printf '%s\t%s\t%s\n' 'headers.malformed-preserved' 'PASS' 'defective raw line retained'
+
+var preserved = read_mbox('fixtures/copy-preservation.mbox')
+assert [len(preserved.messages) === 1]
+assert [entry_bytes(preserved.bytes, preserved.messages[0]) === preserved.bytes]
+printf '%s\t%s\t%s\n' 'headers.raw-byte-preservation' 'PASS' 'single entry view equals exact fixture bytes'
+
+var av = read_mbox('fixtures/address-view.mbox')
+assert [len(av.messages) === 2]
+var a0 = recipients(av.messages[0])
+assert [len(a0) === 4]
+assert [a0[0].display_name === '']
+assert [a0[0].addr_spec === 'bare@example.org']
+assert [a0[1].display_name === 'Display Name']
+assert [a0[1].addr_spec === 'display@example.net']
+printf '%s\t%s\t%s\n' 'addresses.bare-and-display' 'PASS' 'bare and display-name mailboxes'
+
+assert [a0[2].display_name === 'Doe, Jane']
+assert [a0[2].addr_spec === 'jane@example.com']
+printf '%s\t%s\t%s\n' 'addresses.quoted-comma' 'PASS' 'quoted display comma'
+
+var a1 = recipients(av.messages[1])
+assert [len(a1) === 5]
+assert [a1[0].addr_spec === 'first@example.org']
+assert [a1[1].addr_spec === 'second@example.org']
+assert [a1[2].display_name === 'Comma, Name']
+assert [a1[2].addr_spec === 'third@example.org']
+assert [a1[3].addr_spec === 'fourth@example.org']
+assert [a1[4].addr_spec === 'fifth@example.org']
+printf '%s\t%s\t%s\n' 'addresses.folded-repeated' 'PASS' 'folded and repeated address fields'
+
+var selection = read_mbox('fixtures/spec-list-selection.mbox')
+assert [len(selection.messages) === 14]
+var expected = [
+  true, true, true, true, true, true, true,
+  false, false, false, false,
+  true, true,
+  false,
+]
+var selected_count = 0
+for i, message in (selection.messages) {
+  var actual = message_matches_spec(message)
+  assert [actual === expected[i]]
+  if (actual) {
+    setvar selected_count += 1
+  }
+}
+assert [selected_count === 9]
+printf '%s\t%s\t%s\n' 'selection.spec-list-positive' 'PASS' 'nine selected messages match manifest'
+assert [message_matches_spec(selection.messages[7]) === false]
+printf '%s\t%s\t%s\n' 'selection.body-only-negative' 'PASS' 'body-only SPEC-LIST does not select'
+assert [message_matches_spec(selection.messages[8]) === false]
+assert [message_matches_spec(selection.messages[9]) === false]
+assert [message_matches_spec(selection.messages[13]) === false]
+printf '%s\t%s\t%s\n' 'selection.wrong-header-negative' 'PASS' 'unsearched headers do not select'
+
+assert [entry_bytes(preserved.bytes, preserved.messages[0]) === preserved.bytes]
+printf '%s\t%s\t%s\n' 'copy.byte-identical' 'PASS' 'unchanged entry copies as exact byte slice'
+
+var dedup = read_mbox('fixtures/dedup-corners.mbox')
+assert [len(dedup.messages) === 6]
+var copied = ''
+for message in (dedup.messages) {
+  setvar copied = copied ++ entry_bytes(dedup.bytes, message)
+}
+assert [copied === dedup.bytes]
+printf '%s\t%s\t%s\n' 'copy.multiplicity' 'PASS' 'six entries copied in order including exact duplicates'
+
+printf '%s\t%s\t%s\n' 'transaction.ordinary' 'UNIMPLEMENTED' 'no destructive refiler in Grease yet'
+printf '%s\t%s\t%s\n' 'transaction.prepared' 'UNIMPLEMENTED' 'no transaction journal in Grease yet'
+printf '%s\t%s\t%s\n' 'transaction.mid-archive' 'UNIMPLEMENTED' 'no transaction journal in Grease yet'
+printf '%s\t%s\t%s\n' 'transaction.archive-fsynced' 'UNIMPLEMENTED' 'no transaction journal in Grease yet'
+printf '%s\t%s\t%s\n' 'transaction.new-source-tail' 'UNIMPLEMENTED' 'no transaction journal in Grease yet'
+printf '%s\t%s\t%s\n' 'transaction.mutated-prefix-refuse' 'UNIMPLEMENTED' 'no transaction journal in Grease yet'
