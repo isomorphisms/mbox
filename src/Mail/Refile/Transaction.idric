@@ -1,0 +1,75 @@
+module Mail.Refile.Transaction
+
+-- Pure recovery policy for a destructive mbox refile. Filesystem code must
+-- establish these facts before it is allowed to request an action from this
+-- module.
+
+public export
+data SourceRelation
+    = ExactSnapshot
+    | SnapshotWithAppendOnlyTail
+    | SnapshotPrefixChanged
+
+public export
+data JournalPhase
+    = NoJournal
+    | Prepared
+    | Appending Nat
+    | ArchiveFsynced
+
+public export
+data RecoveryAction
+    = StartFreshMove
+    | AppendRemaining Nat
+    | FinishSourceRewrite
+    | FinishSourceRewritePreservingTail
+    | RefuseSourceChanged
+    | RefuseImpossibleProgress
+
+same_action : RecoveryAction → RecoveryAction → Bool
+same_action StartFreshMove StartFreshMove = True
+same_action (AppendRemaining left) (AppendRemaining right) = left == right
+same_action FinishSourceRewrite FinishSourceRewrite = True
+same_action
+    FinishSourceRewritePreservingTail
+    FinishSourceRewritePreservingTail = True
+same_action RefuseSourceChanged RefuseSourceChanged = True
+same_action RefuseImpossibleProgress RefuseImpossibleProgress = True
+same_action _ _ = False
+
+public export
+Eq RecoveryAction where
+    (==) = same_action
+
+remaining_from : Nat → Nat → Maybe Nat
+remaining_from selected completed =
+    if completed <= selected
+       then Just (minus selected completed)
+       else Nothing
+
+export
+plan_recovery :
+    (selected_occurrences : Nat) →
+    SourceRelation →
+    JournalPhase →
+    RecoveryAction
+plan_recovery selected SnapshotPrefixChanged phase =
+    RefuseSourceChanged
+plan_recovery selected SnapshotWithAppendOnlyTail NoJournal =
+    RefuseSourceChanged
+plan_recovery selected SnapshotWithAppendOnlyTail Prepared =
+    RefuseSourceChanged
+plan_recovery selected SnapshotWithAppendOnlyTail (Appending completed) =
+    RefuseSourceChanged
+plan_recovery selected SnapshotWithAppendOnlyTail ArchiveFsynced =
+    FinishSourceRewritePreservingTail
+plan_recovery selected ExactSnapshot NoJournal =
+    StartFreshMove
+plan_recovery selected ExactSnapshot Prepared =
+    AppendRemaining selected
+plan_recovery selected ExactSnapshot (Appending completed) =
+    case remaining_from selected completed of
+        Nothing => RefuseImpossibleProgress
+        Just remaining => AppendRemaining remaining
+plan_recovery selected ExactSnapshot ArchiveFsynced =
+    FinishSourceRewrite
