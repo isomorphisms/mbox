@@ -492,3 +492,139 @@ func addr_spec_matches_domain_fold(a, b) {
   }
   return (ascii_equal_insensitive(a[aa + 1 :], b[bb + 1 :]))
 }
+
+
+# Incremental mboxo framing state used by the shared chunk-equivalence corpus.
+# This deliberately exposes only container boundaries. Header parsing remains a
+# separate layer over the original byte string.
+const MBOX_FROM_PREFIX = 'From '
+
+func initial_mbox_framer() {
+  return ({
+    absolute_offset: 0,
+    at_line_start: true,
+    candidate_prefix: '',
+    open_entry_start: -1,
+  })
+}
+
+func candidate_matches_from_prefix(candidate) {
+  if (len(candidate) > len(MBOX_FROM_PREFIX)) {
+    return (false)
+  }
+  return (MBOX_FROM_PREFIX[0 : len(candidate)] === candidate)
+}
+
+func mbox_frame_event(kind, offset) {
+  return ({kind, offset})
+}
+
+func step_mbox_framer(state, c) {
+  var next_offset = state.absolute_offset + 1
+  var events = []
+
+  if (state.candidate_prefix !== '') {
+    var candidate = state.candidate_prefix ++ c
+
+    if (candidate_matches_from_prefix(candidate) === false) {
+      return ({
+        state: {
+          absolute_offset: next_offset,
+          at_line_start: c === b'\y0a',
+          candidate_prefix: '',
+          open_entry_start: state.open_entry_start,
+        },
+        events,
+      })
+    }
+
+    if (candidate === MBOX_FROM_PREFIX) {
+      var separator_start = state.absolute_offset - 4
+      if (state.open_entry_start !== -1) {
+        call events->append(mbox_frame_event('message-ends', separator_start))
+      }
+      call events->append(mbox_frame_event('envelope-begins', separator_start))
+
+      return ({
+        state: {
+          absolute_offset: next_offset,
+          at_line_start: false,
+          candidate_prefix: '',
+          open_entry_start: separator_start,
+        },
+        events,
+      })
+    }
+
+    return ({
+      state: {
+        absolute_offset: next_offset,
+        at_line_start: true,
+        candidate_prefix: candidate,
+        open_entry_start: state.open_entry_start,
+      },
+      events,
+    })
+  }
+
+  if (state.at_line_start) {
+    if (c === 'F') {
+      return ({
+        state: {
+          absolute_offset: next_offset,
+          at_line_start: true,
+          candidate_prefix: 'F',
+          open_entry_start: state.open_entry_start,
+        },
+        events,
+      })
+    }
+  }
+
+  return ({
+    state: {
+      absolute_offset: next_offset,
+      at_line_start: c === b'\y0a',
+      candidate_prefix: '',
+      open_entry_start: state.open_entry_start,
+    },
+    events,
+  })
+}
+
+func feed_mbox_framer(state, bytes) {
+  var current = state
+  var events = []
+
+  for i in (0 ..< len(bytes)) {
+    var result = step_mbox_framer(current, bytes[i])
+    setvar current = result.state
+    for event in (result.events) {
+      call events->append(event)
+    }
+  }
+
+  return ({state: current, events})
+}
+
+func finish_mbox_framer(state) {
+  if (state.open_entry_start === -1) {
+    return ([])
+  }
+  return ([mbox_frame_event('message-ends', state.absolute_offset)])
+}
+
+func frame_mbox_chunks(first, second) {
+  var first_result = feed_mbox_framer(initial_mbox_framer(), first)
+  var second_result = feed_mbox_framer(first_result.state, second)
+  return (
+    first_result.events ++
+    second_result.events ++
+    finish_mbox_framer(second_result.state)
+  )
+}
+
+func frame_mbox_bytes(bytes) {
+  var result = feed_mbox_framer(initial_mbox_framer(), bytes)
+  return (result.events ++ finish_mbox_framer(result.state))
+}
