@@ -1,0 +1,82 @@
+name: grease-mailbox-fixture
+
+on:
+  push:
+    branches: [Grease]
+    paths:
+      - 'source/**'
+      - 'test/**'
+      - 'corpus/**'
+      - 'LANGUAGE.md'
+      - '.github/workflows/grease-mailbox-fixture.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GREASE_REPOSITORY_REVISION: 94d051fccf7ce6e38da90112d18cb2bf3554769f
+      GREASE_SOURCE_REVISION: 6d29702a10ea9eb72a43950554dbcd4174d07a89
+      REPO_ROOT: ${{ github.workspace }}/grease-source
+    steps:
+      - name: Check out mailbox Grease branch
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Check out exact Grease repository revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: dilapidated-shed/grease
+          ref: ${{ env.GREASE_REPOSITORY_REVISION }}
+          path: grease-repository
+          submodules: recursive
+          persist-credentials: false
+
+      - name: Verify exact Grease source pin
+        shell: bash
+        run: |
+          set -eu
+          test "$(git -C grease-repository rev-parse HEAD)" = "$GREASE_REPOSITORY_REVISION"
+          test "$(git -C grease-repository rev-parse HEAD:source)" = "$GREASE_SOURCE_REVISION"
+          test "$(git -C grease-repository/source rev-parse HEAD)" = "$GREASE_SOURCE_REVISION"
+          printf 'mailbox_revision\t%s\n' "$(git rev-parse HEAD)"
+          printf 'grease_repository_revision\t%s\n' "$GREASE_REPOSITORY_REVISION"
+          printf 'grease_source_revision\t%s\n' "$GREASE_SOURCE_REVISION"
+
+      - name: Check out pinned Oils-derived Grease source as standalone tree
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: isomorphisms/oils
+          ref: ${{ env.GREASE_SOURCE_REVISION }}
+          path: grease-source
+          persist-credentials: false
+
+      - name: Build Grease runtime
+        working-directory: grease-source
+        shell: bash
+        run: |
+          set -eu
+          sudo sysctl vm.mmap_rnd_bits=28
+          podman --version
+          soil/github-actions.sh run-job cpp-spec podman
+          test "$(cat _tmp/soil/commit-hash.txt)" = "$GREASE_SOURCE_REVISION"
+          soil/host-shim.sh did-all-succeed cpp-spec
+          test -x _bin/cxx-asan/ysh
+          _bin/cxx-asan/ysh --version || true
+
+      - name: Run mailbox fixture through built Grease
+        shell: bash
+        run: |
+          set -eu
+          receipt="$RUNNER_TEMP/grease-mailbox-receipt.txt"
+          ./grease-source/_bin/cxx-asan/ysh test/basic.grease | tee "$receipt"
+          grep -Fqx 'PASS Grease mbox parser' "$receipt"
+          printf 'runtime\t%s\n' 'grease-source/_bin/cxx-asan/ysh'
+          printf 'fixture\t%s\n' 'corpus/basic.mbox'
+          printf 'result\tPASS\n'
