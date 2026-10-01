@@ -46,7 +46,7 @@ private string tsvEscape(scope const(char)[] value)
 {
     char[] out;
     foreach (c; value) {
-        final switch (c) {
+        switch (c) {
         case '\\':
             out ~= "\\\\";
             break;
@@ -182,4 +182,10 @@ int main(string[] arguments)
         stderr.writeln(error.msg);
         return 1;
     }
+}
+
+
+unittest {
+    assert(tsvEscape("a\tb\nc\\d") == "a\\tb\\nc\\\\d");
+    assert(asciiLowerCopy("Message-ID") == "message-id");
 }
