@@ -1,0 +1,13 @@
+key	value
+result	PASS
+workflow_run	36803933374
+workflow_job	110184056046
+mailbox_revision	2736075139817098cae0ec35f81fb498a9176153
+mailbox_source_blob	c8be1c8532fe10951036c26ead15517f111b83f0
+mailbox_test_blob	4f19c2edab46b517a576add5cbc966e287e4fd76
+grease_repository_revision	94d051fccf7ce6e38da90112d18cb2bf3554769f
+grease_source_revision	6d29702a10ea9eb72a43950554dbcd4174d07a89
+runtime	grease-source/_bin/cxx-asan/ysh
+fixture	corpus/basic.mbox
+observed_stdout	PASS Grease mbox parser
+host	GitHub Actions ubuntu-24.04 x86_64
