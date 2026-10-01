@@ -24,6 +24,16 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
 
+      - name: Download and verify exact-source Grease release
+        shell: bash
+        run: |
+          set -eu
+          mkdir -p _
+          archive="$GITHUB_WORKSPACE/_/grease-netbsd-9.3-amd64.tar.gz"
+          curl --fail --location --proto '=https' --tlsv1.2             'https://github.com/dilapidated-shed/grease/releases/download/netbsd-9.3-amd64-60641ddd9984/grease-netbsd-9.3-amd64.tar.gz'             -o "$archive"
+          echo 'a7f5e35feebd1a222e2ae724bbbf4a2c1fe28c5683ac3aa6561ed770a9bb3136  '"$archive" |
+            sha256sum -c -
+
       - name: Run fixture with exact-source Grease release on NetBSD
         uses: vmactions/netbsd-vm@c8a0d7ddb84619a7a8cc4e652efa7950b3fd9f92
         with:
@@ -36,10 +46,6 @@ jobs:
             archive="$GITHUB_WORKSPACE/_/grease-netbsd-9.3-amd64.tar.gz"
             rm -rf "$work"
             mkdir -p "$work"
-
-            ftp -o "$archive" 'https://github.com/dilapidated-shed/grease/releases/download/netbsd-9.3-amd64-60641ddd9984/grease-netbsd-9.3-amd64.tar.gz'
-            actual="$(sha256 -q "$archive")"
-            test "$actual" = 'a7f5e35feebd1a222e2ae724bbbf4a2c1fe28c5683ac3aa6561ed770a9bb3136'
 
             tar -xzf "$archive" -C "$work"
             test -x "$work/grease"
