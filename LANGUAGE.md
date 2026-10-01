@@ -5,8 +5,11 @@ This branch implements the v0 mailbox contract and the generic mailbox filer in 
 Current code:
 
 - `source/mbox.d`: byte-preserving mboxo framing and RFC-header core;
-- `source/mbox_file.d`: generic dry-run/refile command;
-- `bin/file-spec-list`: thin SPEC-LIST policy wrapper.
+- `source/mbox_file.d`: reusable generic dry-run/refile engine;
+- `source/mbox_file_main.d`: generic `mbox-file` command front end;
+- `source/file_spec_list.d`: native D SPEC-LIST policy front end;
+- `source/mbox_inspect.d`: read-only TSV mailbox/header inspector;
+- `bin/file-spec-list`: earlier thin shell compatibility wrapper.
 
 Implemented:
 
@@ -35,11 +38,16 @@ Implemented:
   selection, body-only false positives, the 4 MiB guard, reused Message-ID
   values, and duplicate-entry multiplicity.
 
-SPEC-LIST policy remains outside the generic filer.  The wrapper searches only
-`From`, `Sender`, `Reply-To`, `To`, `Cc`, and `Subject` for
-`SPEC-LIST`, case-insensitively.  It defaults to
-`/var/mail/isomorphisms` -> `$HOME/Mail/spec-list`.  Running it without
+SPEC-LIST policy remains outside the generic filer.  The native D front end and
+the older shell wrapper search only `From`, `Sender`, `Reply-To`, `To`,
+`Cc`, and `Subject` for `SPEC-LIST`, case-insensitively.  They default to
+`/var/mail/isomorphisms` -> `$HOME/Mail/spec-list`.  Running without
 `--move` is a scan only.
+
+`mbox-inspect` is deliberately read-only.  It streams the mailbox, refuses
+header blocks above 4 MiB, reports byte ranges and malformed-header counts, and
+prints selected unfolded header views as escaped TSV.  It also refuses to call
+the inspection stable if the mailbox size changes during the scan.
 
 Not implemented in this branch:
 
