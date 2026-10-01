@@ -429,7 +429,7 @@ private int runMove(
     return 0;
 }
 
-int main(string[] arguments)
+int runMboxFile(string[] arguments)
 {
     string sourcePath;
     string archivePath;
