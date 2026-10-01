@@ -1,0 +1,57 @@
+name: Grease mailbox NetBSD fixture
+
+on:
+  push:
+    branches: [Grease]
+    paths:
+      - 'source/**'
+      - 'test/**'
+      - 'corpus/**'
+      - '.github/workflows/grease-mailbox-netbsd.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fixture:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Check out exact mailbox revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Run fixture with exact-source Grease release on NetBSD
+        uses: vmactions/netbsd-vm@c8a0d7ddb84619a7a8cc4e652efa7950b3fd9f92
+        with:
+          release: "9.3"
+          arch: x86_64
+          sync: rsync
+          run: |
+            set -eu
+            work="$GITHUB_WORKSPACE/_/grease-release"
+            archive="$GITHUB_WORKSPACE/_/grease-netbsd-9.3-amd64.tar.gz"
+            rm -rf "$work"
+            mkdir -p "$work"
+
+            ftp -o "$archive" 'https://github.com/dilapidated-shed/grease/releases/download/netbsd-9.3-amd64-60641ddd9984/grease-netbsd-9.3-amd64.tar.gz'
+            actual="$(sha256 -q "$archive")"
+            test "$actual" = 'a7f5e35feebd1a222e2ae724bbbf4a2c1fe28c5683ac3aa6561ed770a9bb3136'
+
+            tar -xzf "$archive" -C "$work"
+            test -x "$work/grease"
+            test -x "$work/greasecpp"
+
+            receipt="$GITHUB_WORKSPACE/_/grease-mailbox-netbsd-receipt.txt"
+            cd "$GITHUB_WORKSPACE"
+            "$work/grease" test/basic.grease | tee "$receipt"
+            grep -Fqx 'PASS Grease mbox parser' "$receipt"
+
+            printf 'grease_source_revision\t%s\n' '6d29702a10ea9eb72a43950554dbcd4174d07a89'
+            printf 'grease_release_repository_revision\t%s\n' '60641ddd99844655c0788f790cd3a8a14c7166fd'
+            printf 'mailbox_revision\t%s\n' '${{ github.sha }}'
+            printf 'fixture\t%s\n' 'corpus/basic.mbox'
+            printf 'result\tPASS\n'
