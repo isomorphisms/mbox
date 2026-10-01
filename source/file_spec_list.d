@@ -2,7 +2,7 @@ module file_spec_list;
 
 import mbox_file : runMboxFile;
 
-int main(string[] arguments)
+string[] specListArguments(scope const string[] userArguments)
 {
     string[] forwarded = [
         "file-spec-list",
@@ -18,8 +18,31 @@ int main(string[] arguments)
         "--ignore-case",
     ];
 
-    if (arguments.length > 1)
-        forwarded ~= arguments[1 .. $];
+    forwarded ~= userArguments;
+    return forwarded;
+}
 
-    return runMboxFile(forwarded);
+int main(string[] arguments)
+{
+    const userArguments =
+        arguments.length > 1 ? arguments[1 .. $] : [];
+    return runMboxFile(specListArguments(userArguments));
+}
+
+unittest {
+    const args = specListArguments(["--move"]);
+    assert(args[0] == "file-spec-list");
+    assert(args[$ - 1] == "--move");
+
+    size_t sourceCount;
+    size_t headerCount;
+    foreach (arg; args) {
+        if (arg == "--source")
+            ++sourceCount;
+        if (arg == "--header")
+            ++headerCount;
+    }
+
+    assert(sourceCount == 1);
+    assert(headerCount == 6);
 }
