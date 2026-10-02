@@ -1,0 +1,155 @@
+name: D implementation
+
+on:
+  push:
+    branches:
+      - D
+    paths:
+      - "source/**"
+      - "fixtures/**"
+      - "tests/**"
+      - "LANGUAGE.md"
+      - ".github/workflows/d-implementation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  linux-normal-d:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out exact mbox source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - name: Verify shared fixture bytes
+        run: sh tests/shared-fixtures.sh
+
+      - name: Install bootstrap dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential ldc
+
+      - name: Check out pinned ICK DMD
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: dilapidated-shed/ick
+          ref: ac15b23e75755773809ada172ed378555b0adffe
+          path: .ick
+          persist-credentials: false
+
+      - name: Build pinned ICK DMD
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd .ick/dmd/compiler/src
+          ldmd2 -run ./build.d dmd HOST_DMD="$(command -v ldmd2)"
+          dmd_bin=$(find ../../generated -type f -name dmd -perm -u+x -print -quit)
+          test -n "$dmd_bin"
+          dmd_bin=$(realpath "$dmd_bin")
+          "$dmd_bin" --version
+          printf '%s\n' "$dmd_bin" > "$GITHUB_WORKSPACE/.icky-dmd-bin"
+
+      - name: Check out matching runtime sources
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: dlang/dmd
+          ref: 74917954b53f7f35b13e61b4438c7253834929ed
+          path: .runtime-dmd
+          persist-credentials: false
+
+      - name: Check out matching Phobos
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: dlang/phobos
+          ref: 7b158eba80b97dfcdd8931bcaea1ad0ca35ceb95
+          path: .runtime-phobos
+          persist-credentials: false
+
+      - name: Install ICK DMD into runtime tree
+        shell: bash
+        run: |
+          set -euxo pipefail
+          dmd_bin=$(cat .icky-dmd-bin)
+          mkdir -p .runtime-dmd/generated/linux/release/64
+          cp "$dmd_bin" .runtime-dmd/generated/linux/release/64/dmd
+          chmod +x .runtime-dmd/generated/linux/release/64/dmd
+
+      - name: Build matching druntime and Phobos
+        shell: bash
+        run: |
+          set -euxo pipefail
+          dmd_bin="$GITHUB_WORKSPACE/.runtime-dmd/generated/linux/release/64/dmd"
+          make -C .runtime-dmd/druntime -j"$(nproc)"             MODEL=64 OS=linux BUILD=release SHARED=0 DMD="$dmd_bin"
+          make -C .runtime-phobos -j"$(nproc)"             MODEL=64 OS=linux BUILD=release SHARED=0 USE_IMPORTC=1             DMD_DIR="$GITHUB_WORKSPACE/.runtime-dmd" DMD="$dmd_bin"
+          test -f .runtime-dmd/generated/linux/release/64/libdruntime.a
+          test -f .runtime-phobos/generated/linux/release/64/libphobos2.a
+
+      - name: Run D library and filer unit tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          dmd_bin="$GITHUB_WORKSPACE/.runtime-dmd/generated/linux/release/64/dmd"
+          runtime_import="$GITHUB_WORKSPACE/.runtime-dmd/druntime/import"
+          phobos="$GITHUB_WORKSPACE/.runtime-phobos"
+          phobos_lib="$phobos/generated/linux/release/64/libphobos2.a"
+
+          "$dmd_bin" -conf= -fPIC -unittest -main             -I"$runtime_import" -I"$phobos" -Isource             source/mbox.d source/mbox_file.d             "$phobos_lib"             -defaultlib= -debuglib= -L-lpthread -L-lm -L-ldl             -of=/tmp/mbox-d-tests
+          /tmp/mbox-d-tests
+
+      - name: Build D commands
+        shell: bash
+        run: |
+          set -euxo pipefail
+          dmd_bin="$GITHUB_WORKSPACE/.runtime-dmd/generated/linux/release/64/dmd"
+          runtime_import="$GITHUB_WORKSPACE/.runtime-dmd/druntime/import"
+          phobos="$GITHUB_WORKSPACE/.runtime-phobos"
+          phobos_lib="$phobos/generated/linux/release/64/libphobos2.a"
+          common="-conf= -fPIC -I$runtime_import -I$phobos -Isource"
+
+          "$dmd_bin" $common             source/mbox.d source/mbox_file.d source/mbox_file_main.d             "$phobos_lib"             -defaultlib= -debuglib= -L-lpthread -L-lm -L-ldl             -of=/tmp/mbox-file
+
+          "$dmd_bin" $common             source/mbox.d source/mbox_inspect.d             "$phobos_lib"             -defaultlib= -debuglib= -L-lpthread -L-lm -L-ldl             -of=/tmp/mbox-inspect
+
+          "$dmd_bin" $common             source/mbox.d source/mbox_file.d source/file_spec_list.d             "$phobos_lib"             -defaultlib= -debuglib= -L-lpthread -L-lm -L-ldl             -of=/tmp/file-spec-list
+
+          test -x /tmp/mbox-file
+          test -x /tmp/mbox-inspect
+          test -x /tmp/file-spec-list
+
+      - name: Smoke read-only fixture paths
+        shell: bash
+        run: |
+          set -euxo pipefail
+          /tmp/mbox-inspect             --source fixtures/header-corners.mbox             --header Subject > /tmp/inspect.tsv
+          grep -F $'header\t' /tmp/inspect.tsv
+
+          rm -f /tmp/mbox-archive
+          /tmp/mbox-file             --source fixtures/spec-list-selection.mbox             --archive /tmp/mbox-archive             --header To             --header Cc             --header Subject             --pattern SPEC-LIST             --ignore-case > /tmp/file-plan.txt
+          grep -F 'dry run: no mailbox bytes changed' /tmp/file-plan.txt
+          test ! -e /tmp/mbox-archive
+
+          /tmp/file-spec-list --help > /tmp/spec-list-help.txt
+
+      - name: Record exact compiler boundary
+        shell: bash
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          PASS: mbox D sources compiled and unit tests executed with ICK DMD
+          ac15b23e75755773809ada172ed378555b0adffe and its matching v2.113
+          druntime/Phobos on Linux amd64.
+
+          PASS: mbox-file, mbox-inspect, and file-spec-list linked through that
+          ICK DMD toolchain and the read-only fixture smoke paths executed.
+
+          The pinned ICK revision separately has green NetBSD amd64 BetterC
+          object-generation evidence.
+
+          OUT OF SCOPE: NetBSD normal-D druntime/Phobos linking and native SDF
+          execution. Those remain a deployment qualification step.
+          EOF
