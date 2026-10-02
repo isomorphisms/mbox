@@ -1,0 +1,64 @@
+name: D transaction planner
+
+on:
+  push:
+    branches:
+      - D-transaction-journal
+    paths:
+      - "source/**"
+      - "tests/**"
+      - "ci/**"
+      - ".github/workflows/d-transaction.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mbox-d-transaction-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  recovery-plan:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out exact mbox source
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          persist-credentials: false
+
+      - name: Install bootstrap dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential ldc
+
+      - name: Check out pinned ICK DMD
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: dilapidated-shed/ick
+          ref: ac15b23e75755773809ada172ed378555b0adffe
+          path: .ick
+          persist-credentials: false
+
+      - name: Check out matching runtime sources
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: dlang/dmd
+          ref: 74917954b53f7f35b13e61b4438c7253834929ed
+          path: .runtime-dmd
+          persist-credentials: false
+
+      - name: Check out matching Phobos
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: dlang/phobos
+          ref: 7b158eba80b97dfcdd8931bcaea1ad0ca35ceb95
+          path: .runtime-phobos
+          persist-credentials: false
+
+      - name: Build and execute transaction planner
+        shell: bash
+        run: bash ci/d-transaction.sh
