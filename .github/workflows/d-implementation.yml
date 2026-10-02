@@ -129,6 +129,29 @@ jobs:
           test -x /tmp/file-spec-list
           test -x /tmp/mbox-conformance
 
+      - name: Build and exercise BetterC SPEC-LIST planner
+        shell: bash
+        run: |
+          set -euxo pipefail
+          dmd_bin="$GITHUB_WORKSPACE/.runtime-dmd/generated/linux/release/64/dmd"
+          runtime_import="$GITHUB_WORKSPACE/.runtime-dmd/druntime/import"
+
+          "$dmd_bin" -conf= -betterC -release             -I"$runtime_import"             source/spec_list_plan_betterc.d             -of=/tmp/spec-list-plan-betterc
+
+          /tmp/spec-list-plan-betterc             fixtures/spec-list-selection.mbox             > /tmp/spec-list-plan.tsv             2> /tmp/spec-list-plan.stderr
+          test "$(wc -l < /tmp/spec-list-plan.tsv | tr -d ' ')" = 9
+          grep -Fx 'matched: 9' /tmp/spec-list-plan.stderr
+
+          /tmp/spec-list-plan-betterc             fixtures/empty.mbox             > /tmp/spec-list-empty.tsv             2> /tmp/spec-list-empty.stderr
+          test ! -s /tmp/spec-list-empty.tsv
+          grep -Fx 'matched: 0' /tmp/spec-list-empty.stderr
+
+          "$dmd_bin" -conf= -betterC -release -c -fPIC             -target=x86_64-unknown-netbsd             -I"$GITHUB_WORKSPACE/.runtime-dmd/druntime/src"             source/spec_list_plan_betterc.d             -of=/tmp/spec-list-plan-netbsd.o
+
+          readelf -h /tmp/spec-list-plan-netbsd.o             | tee /tmp/spec-list-plan-netbsd.elf
+          grep -Eq 'Class:[[:space:]]+ELF64'             /tmp/spec-list-plan-netbsd.elf
+          grep -Eq 'Machine:[[:space:]]+Advanced Micro Devices X86-64'             /tmp/spec-list-plan-netbsd.elf
+
       - name: Smoke read-only fixture paths
         shell: bash
         run: |
@@ -212,8 +235,12 @@ jobs:
           ac15b23e75755773809ada172ed378555b0adffe and its matching v2.113
           druntime/Phobos on Linux amd64.
 
-          PASS: mbox-file, mbox-inspect, and file-spec-list linked through that
-          ICK DMD toolchain and the read-only fixture smoke paths executed.
+          PASS: mbox-file, mbox-inspect, file-spec-list, and the BetterC
+          SPEC-LIST planner were compiled through that ICK DMD toolchain and
+          their read-only fixture paths executed.
+
+          PASS: the same BetterC planner source produced a NetBSD amd64 ELF
+          object with the pinned ICK DMD target.
 
           The pinned ICK revision separately has green NetBSD amd64 BetterC
           object-generation evidence.
