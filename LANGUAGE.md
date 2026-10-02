@@ -9,6 +9,7 @@ Current code:
 - `source/mbox_file_main.d`: generic `mbox-file` command front end;
 - `source/file_spec_list.d`: native D SPEC-LIST policy front end;
 - `source/mbox_inspect.d`: read-only TSV mailbox/header inspector;
+- `source/mbox_conformance.d`: shared-fixture executable conformance runner;
 - `bin/file-spec-list`: earlier thin shell compatibility wrapper.
 
 Implemented:
@@ -34,9 +35,10 @@ Implemented:
   mailbox;
 - source mode preservation and fail-closed owner/group verification before
   replacement;
-- tests for streaming/buffer framing equivalence, folded/repeated header
-  selection, body-only false positives, the 4 MiB guard, reused Message-ID
-  values, and duplicate-entry multiplicity.
+- shared-fixture cases for byte ranges, LF/CRLF framing, arbitrary chunk splits,
+  folded/repeated/malformed headers, raw header bytes, address forms, exact
+  SPEC-LIST selection, byte-identical copying, duplicate multiplicity, and the
+  ordinary archive-first transaction.
 
 SPEC-LIST policy remains outside the generic filer.  The native D front end and
 the older shell wrapper search only `From`, `Sender`, `Reply-To`, `To`,
@@ -59,28 +61,57 @@ Not implemented in this branch:
   the current design prefers possible duplication over silently discarding a
   source occurrence.
 
-## Build gate
+## Build and execution gate
 
-Do not quietly build this branch with ordinary DMD/GDC.  The repository policy
-requires ICK or NDK.
+Do not quietly substitute ordinary DMD/GDC.  This branch's execution workflow
+pins ICK DMD revision
+`ac15b23e75755773809ada172ed378555b0adffe`.
 
-As of 2026-09-30, the current ICK `gdc-netbsd-amd64` head
-`22b41425cb478754346637db87ebd42e43b42863` fails while building target
-libgcc, before this repository is compiled: the compiler ICEs in
-`tree-complex.cc` while compiling the complex multiply helpers.  Therefore
-the filer source and tests are reviewed but are **not yet compile-verified on
-the approved SDF/NetBSD path**.  No ordinary-compiler fallback has been used.
+That ICK revision already has independent green evidence for:
+
+- building the owned DMD v2.113 compiler;
+- NetBSD amd64 BetterC object generation;
+- Linux normal-D druntime and Phobos;
+- Icky-D Unicode/compiler qualification.
+
+The `D implementation` workflow reconstructs the matching v2.113
+druntime/Phobos with that exact ICK DMD, compiles this repository's D sources,
+runs the unit tests, builds `mbox-file`, `mbox-inspect`,
+`file-spec-list`, and `mbox-conformance`, and executes the shared fixtures.
+A PASS is claimed only from that executed workflow, not from source presence or
+this document.
+
+The historical GDC revision
+`22b41425cb478754346637db87ebd42e43b42863` still exposes a real ICK
+polar-complex optimizer defect in libgcc `__multc3`/`__divtc3` at `-O2`,
+but it is no longer the selected compiler path for this D mailbox work.
+
+### NetBSD/SDF deployment boundary
+
+The remaining deployment gap is full normal-D druntime/Phobos qualification on
+NetBSD amd64.  The existing NetBSD receipt proves BetterC object generation and
+native ABI execution, while the normal-D runtime receipt is currently Linux.
+Track the missing combined boundary in
+`dilapidated-shed/ick#61`, **Qualify normal-D runtime and Phobos on NetBSD
+amd64**.
+
+Do not infer SDF execution from the Linux full-D receipt or from the NetBSD
+BetterC receipt.
 
 ## Transaction fixture status
 
-The shared transaction fixtures from `main` are present on this branch.
+The ordinary transaction fixture is executable: selected source occurrences are
+copied one-for-one, archive bytes are made durable before source replacement,
+and byte-identical duplicates retain their multiplicity.
 
-Current D behavior is expected to satisfy the fresh-run multiplicity rule:
-selected occurrences are copied one-for-one and byte-identical source entries
-are not collapsed.
+Crash/retry states remain deliberately `UNIMPLEMENTED` until a durable
+transaction journal exists:
 
-Current D behavior is **not conformant** to the crash/retry transaction contract
-yet because it has no durable transaction journal. In particular, a restart
-after archive fsync but before source replacement can append the same
-transaction occurrences again. The new recovery fixtures are intentionally a
-red gate for that work rather than an excuse to deduplicate by content.
+- prepared;
+- partially appended archive;
+- archive fsynced before source replacement;
+- append-only source tail discovered during recovery;
+- mutated source prefix, which must refuse recovery.
+
+Do not weaken those cases or replace occurrence identity with content
+deduplication merely to obtain a green receipt.
