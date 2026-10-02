@@ -1,8 +1,10 @@
 module mbox_conformance;
 
-import std.conv : to;\nimport std.exception : enforce;
+import std.conv : to;
+import std.exception : enforce;
 import std.file;
-import std.regex : regex;\nimport std.string : indexOf;
+import std.regex : regex;
+import std.string : indexOf;
 import std.stdio : File, stdout;
 
 import mbox :
