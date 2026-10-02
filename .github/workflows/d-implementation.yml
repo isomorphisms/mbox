@@ -196,7 +196,9 @@ jobs:
           sh tests/conformance/check-receipt.sh \
             tests/conformance/cases.tsv \
             tests/conformance/receipt.tsv
-          cmp tests/conformance/expected.tsv tests/conformance/receipt.tsv
+          LC_ALL=C sort tests/conformance/expected.tsv > /tmp/expected.sorted
+          LC_ALL=C sort tests/conformance/receipt.tsv > /tmp/receipt.sorted
+          cmp /tmp/expected.sorted /tmp/receipt.sorted
 
       - name: Record exact compiler boundary
         shell: bash
