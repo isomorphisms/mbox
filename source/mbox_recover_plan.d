@@ -17,7 +17,7 @@ enum ioChunk = 1024 * 1024;
 
 private ulong jsonUlong(scope const JSONValue value)
 {
-    final switch (value.type)
+    switch (value.type)
     {
     case JSONType.integer:
         enforce(value.integer >= 0, "negative byte count in journal");
