@@ -1,29 +1,29 @@
 fixture.checksums	PASS	shared fixture checksum gate
-framing.empty	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain is blocked at 22b41425cb478754346637db87ebd42e43b42863
-framing.lf-ranges	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
-framing.crlf-ranges	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
-framing.unescaped-from-splits	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
-framing.content-length-ignored	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
-framing.escaped-from-preserved	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
-framing.empty-body	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
-framing.eof-no-newline	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
-streaming.chunk-equivalence	BLOCKED	arbitrary-chunk framer and all-split unit test exist; approved Ick/NetBSD toolchain blocked
-headers.case-insensitive	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
-headers.fold	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
-headers.repeated	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
-headers.empty-value	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
-headers.colon-in-value	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
-headers.malformed-preserved	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
-headers.raw-byte-preservation	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
-addresses.bare-and-display	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
-addresses.quoted-comma	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
-addresses.folded-repeated	BLOCKED	D implementation exists; approved Ick/NetBSD toolchain blocked
-selection.spec-list-positive	BLOCKED	D filer exists; approved Ick/NetBSD toolchain blocked
-selection.body-only-negative	BLOCKED	D filer exists; approved Ick/NetBSD toolchain blocked
-selection.wrong-header-negative	BLOCKED	D filer exists; approved Ick/NetBSD toolchain blocked
-copy.byte-identical	BLOCKED	D byte-slice copy exists; approved Ick/NetBSD toolchain blocked
-copy.multiplicity	BLOCKED	D one-for-one copy exists; approved Ick/NetBSD toolchain blocked
-transaction.ordinary	BLOCKED	D fresh-run move exists; approved Ick/NetBSD toolchain blocked
+framing.empty	PASS	fixtures/empty.mbox parsed as zero messages
+framing.lf-ranges	PASS	published LF byte ranges matched
+framing.crlf-ranges	PASS	published CRLF byte ranges matched
+framing.unescaped-from-splits	PASS	raw mboxo From line split exactly as specified
+framing.content-length-ignored	PASS	Content-Length did not affect entry boundary
+framing.escaped-from-preserved	PASS	>From and >>From remained body data
+framing.empty-body	PASS	empty body retained as zero-byte body range
+framing.eof-no-newline	PASS	last message ended exactly at EOF
+streaming.chunk-equivalence	PASS	all split points matched whole-buffer framing
+headers.case-insensitive	PASS	mixed-case names matched ASCII-insensitively
+headers.fold	PASS	folded Subject unfolded to one logical value
+headers.repeated	PASS	repeated fields retained order and multiplicity
+headers.empty-value	PASS	empty values remained empty
+headers.colon-in-value	PASS	colon-bearing value preserved
+headers.malformed-preserved	PASS	malformed physical header retained as raw defect
+headers.raw-byte-preservation	PASS	raw field ranges reproduce fixture bytes exactly
+addresses.bare-and-display	PASS	bare and display-name mailboxes parsed
+addresses.quoted-comma	PASS	quoted comma and domain spelling handled
+addresses.folded-repeated	PASS	folded and repeated address fields retained all mailboxes
+selection.spec-list-positive	PASS	all nine policy-positive entries selected in source order
+selection.body-only-negative	PASS	body-only SPEC-LIST mention did not select
+selection.wrong-header-negative	PASS	unsearched headers did not select
+copy.byte-identical	PASS	actual mbox-file move preserved the selected entry byte-for-byte
+copy.multiplicity	PASS	actual mbox-file move preserved all six source occurrences
+transaction.ordinary	PASS	actual archive-first move matched ordinary source/archive oracle
 transaction.prepared	UNIMPLEMENTED	no durable transaction journal
 transaction.mid-archive	UNIMPLEMENTED	no durable transaction journal
 transaction.archive-fsynced	UNIMPLEMENTED	no durable transaction journal
