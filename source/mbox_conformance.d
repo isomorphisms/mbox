@@ -335,6 +335,14 @@ private void addressCases()
     pass("addresses.folded-repeated", "folded and repeated address fields retained all mailboxes");
 }
 
+private bool contains(scope const string[] values, string wanted)
+{
+    foreach (value; values)
+        if (value == wanted)
+            return true;
+    return false;
+}
+
 private void selectionCases()
 {
     auto source = File("fixtures/spec-list-selection.mbox", "rb");
@@ -372,7 +380,7 @@ private void selectionCases()
     pass("selection.spec-list-positive", "all nine policy-positive entries selected in source order");
 
     requireCase(
-        !("<body-only@example.org>" in ids),
+        !contains(ids, "<body-only@example.org>"),
         "selection.body-only-negative",
         "body-only mention selected"
     );
