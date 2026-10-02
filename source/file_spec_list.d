@@ -24,8 +24,10 @@ string[] specListArguments(scope const string[] userArguments)
 
 int main(string[] arguments)
 {
-    const userArguments =
-        arguments.length > 1 ? arguments[1 .. $] : [];
+    string[] userArguments;
+    if (arguments.length > 1)
+        userArguments = arguments[1 .. $];
+
     return runMboxFile(specListArguments(userArguments));
 }
 
