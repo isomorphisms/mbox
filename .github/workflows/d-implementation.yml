@@ -8,6 +8,7 @@ on:
       - "source/**"
       - "fixtures/**"
       - "tests/**"
+      - "ci/**"
       - "LANGUAGE.md"
       - ".github/workflows/d-implementation.yml"
   workflow_dispatch:
@@ -31,6 +32,233 @@ jobs:
 
       - name: Verify shared fixture bytes
         run: sh tests/shared-fixtures.sh
+
+      - name: Verify selected ICK revisions
+        shell: bash
+        run: |
+          set -euxo pipefail
+          test "$(head -n 1 ci/build-toolchain.tsv)" =             
+      - name: Install bootstrap dependencies
+        shell: bash
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y build-essential ldc
+
+      - name: Check out pinned ICK DMD
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: dilapidated-shed/ick
+          ref: ac15b23e75755773809ada172ed378555b0adffe
+          path: .ick
+          persist-credentials: false
+
+      - name: Build pinned ICK DMD
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cd .ick/dmd/compiler/src
+          ldmd2 -run ./build.d dmd HOST_DMD="$(command -v ldmd2)"
+          dmd_bin=$(find ../../generated -type f -name dmd -perm -u+x -print -quit)
+          test -n "$dmd_bin"
+          dmd_bin=$(realpath "$dmd_bin")
+          "$dmd_bin" --version
+          printf '%s\n' "$dmd_bin" > "$GITHUB_WORKSPACE/.icky-dmd-bin"
+
+      - name: Check out matching runtime sources
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: dlang/dmd
+          ref: 74917954b53f7f35b13e61b4438c7253834929ed
+          path: .runtime-dmd
+          persist-credentials: false
+
+      - name: Check out matching Phobos
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+        with:
+          repository: dlang/phobos
+          ref: 7b158eba80b97dfcdd8931bcaea1ad0ca35ceb95
+          path: .runtime-phobos
+          persist-credentials: false
+
+      - name: Install ICK DMD into runtime tree
+        shell: bash
+        run: |
+          set -euxo pipefail
+          dmd_bin=$(cat .icky-dmd-bin)
+          mkdir -p .runtime-dmd/generated/linux/release/64
+          cp "$dmd_bin" .runtime-dmd/generated/linux/release/64/dmd
+          chmod +x .runtime-dmd/generated/linux/release/64/dmd
+
+      - name: Build matching druntime and Phobos
+        shell: bash
+        run: |
+          set -euxo pipefail
+          dmd_bin="$GITHUB_WORKSPACE/.runtime-dmd/generated/linux/release/64/dmd"
+          make -C .runtime-dmd/druntime -j"$(nproc)"             MODEL=64 OS=linux BUILD=release SHARED=0 DMD="$dmd_bin"
+          make -C .runtime-phobos -j"$(nproc)"             MODEL=64 OS=linux BUILD=release SHARED=0 USE_IMPORTC=1             DMD_DIR="$GITHUB_WORKSPACE/.runtime-dmd" DMD="$dmd_bin"
+          test -f .runtime-dmd/generated/linux/release/64/libdruntime.a
+          test -f .runtime-phobos/generated/linux/release/64/libphobos2.a
+
+      - name: Run D library and filer unit tests
+        shell: bash
+        run: |
+          set -euxo pipefail
+          dmd_bin="$GITHUB_WORKSPACE/.runtime-dmd/generated/linux/release/64/dmd"
+          runtime_import="$GITHUB_WORKSPACE/.runtime-dmd/druntime/import"
+          phobos="$GITHUB_WORKSPACE/.runtime-phobos"
+          phobos_lib="$phobos/generated/linux/release/64/libphobos2.a"
+
+          "$dmd_bin" -conf= -fPIC -unittest -main             -I"$runtime_import" -I"$phobos" -Isource             source/mbox.d source/mbox_file.d             "$phobos_lib"             -defaultlib= -debuglib= -L-lpthread -L-lm -L-ldl             -of=/tmp/mbox-d-tests
+          /tmp/mbox-d-tests
+
+      - name: Build D commands
+        shell: bash
+        run: |
+          set -euxo pipefail
+          dmd_bin="$GITHUB_WORKSPACE/.runtime-dmd/generated/linux/release/64/dmd"
+          runtime_import="$GITHUB_WORKSPACE/.runtime-dmd/druntime/import"
+          phobos="$GITHUB_WORKSPACE/.runtime-phobos"
+          phobos_lib="$phobos/generated/linux/release/64/libphobos2.a"
+          common="-conf= -fPIC -I$runtime_import -I$phobos -Isource"
+
+          "$dmd_bin" $common             source/mbox.d source/mbox_file.d source/mbox_file_main.d             "$phobos_lib"             -defaultlib= -debuglib= -L-lpthread -L-lm -L-ldl             -of=/tmp/mbox-file
+
+          "$dmd_bin" $common             source/mbox.d source/mbox_inspect.d             "$phobos_lib"             -defaultlib= -debuglib= -L-lpthread -L-lm -L-ldl             -of=/tmp/mbox-inspect
+
+          "$dmd_bin" $common             source/mbox.d source/mbox_file.d source/file_spec_list.d             "$phobos_lib"             -defaultlib= -debuglib= -L-lpthread -L-lm -L-ldl             -of=/tmp/file-spec-list
+
+          "$dmd_bin" $common             source/mbox.d source/mbox_file.d source/mbox_conformance.d             "$phobos_lib"             -defaultlib= -debuglib= -L-lpthread -L-lm -L-ldl             -of=/tmp/mbox-conformance
+
+          test -x /tmp/mbox-file
+          test -x /tmp/mbox-inspect
+          test -x /tmp/file-spec-list
+          test -x /tmp/mbox-conformance
+
+      - name: Build and exercise BetterC SPEC-LIST planner
+        shell: bash
+        run: |
+          set -euxo pipefail
+          dmd_bin="$GITHUB_WORKSPACE/.runtime-dmd/generated/linux/release/64/dmd"
+          runtime_import="$GITHUB_WORKSPACE/.runtime-dmd/druntime/import"
+
+          "$dmd_bin" -conf= -betterC -release             -I"$runtime_import"             source/spec_list_plan_betterc.d             -of=/tmp/spec-list-plan-betterc
+
+          /tmp/spec-list-plan-betterc             fixtures/spec-list-selection.mbox             > /tmp/spec-list-plan.tsv             2> /tmp/spec-list-plan.stderr
+          test "$(wc -l < /tmp/spec-list-plan.tsv | tr -d ' ')" = 9
+          grep -Fx 'matched: 9' /tmp/spec-list-plan.stderr
+
+          /tmp/spec-list-plan-betterc             fixtures/empty.mbox             > /tmp/spec-list-empty.tsv             2> /tmp/spec-list-empty.stderr
+          test ! -s /tmp/spec-list-empty.tsv
+          grep -Fx 'matched: 0' /tmp/spec-list-empty.stderr
+
+          "$dmd_bin" -conf= -betterC -release -c -fPIC             -target=x86_64-unknown-netbsd             -I"$GITHUB_WORKSPACE/.runtime-dmd/druntime/src"             source/spec_list_plan_betterc.d             -of=/tmp/spec-list-plan-netbsd.o
+
+          readelf -h /tmp/spec-list-plan-netbsd.o             | tee /tmp/spec-list-plan-netbsd.elf
+          grep -Eq 'Class:[[:space:]]+ELF64'             /tmp/spec-list-plan-netbsd.elf
+          grep -Eq 'Machine:[[:space:]]+Advanced Micro Devices X86-64'             /tmp/spec-list-plan-netbsd.elf
+
+      - name: Smoke read-only fixture paths
+        shell: bash
+        run: |
+          set -euxo pipefail
+          /tmp/mbox-inspect             --source fixtures/header-corners.mbox             --header Subject > /tmp/inspect.tsv
+          grep -F $'header\t' /tmp/inspect.tsv
+
+          rm -f /tmp/mbox-archive
+          /tmp/mbox-file             --source fixtures/spec-list-selection.mbox             --archive /tmp/mbox-archive             --header To             --header Cc             --header Subject             --pattern SPEC-LIST             --ignore-case > /tmp/file-plan.txt
+          grep -F 'dry run: no mailbox bytes changed' /tmp/file-plan.txt
+          test ! -e /tmp/mbox-archive
+
+          /tmp/file-spec-list --help > /tmp/spec-list-help.txt
+
+      - name: Run shared D conformance cases
+        shell: bash
+        run: |
+          set -euxo pipefail
+          /tmp/mbox-conformance | tee /tmp/d-core-receipt.tsv
+
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
+
+          cp fixtures/copy-preservation.mbox "$tmp/copy-source"
+          /tmp/mbox-file \
+            --source "$tmp/copy-source" \
+            --archive "$tmp/copy-archive" \
+            --header Message-ID \
+            --pattern preserve@example.org \
+            --move
+          cmp fixtures/copy-preservation.mbox "$tmp/copy-archive"
+          test ! -s "$tmp/copy-source"
+
+          cp fixtures/dedup-corners.mbox "$tmp/dedup-source"
+          /tmp/mbox-file \
+            --source "$tmp/dedup-source" \
+            --archive "$tmp/dedup-archive" \
+            --header To \
+            --pattern user@example.org \
+            --move
+          cmp fixtures/dedup-corners.mbox "$tmp/dedup-archive"
+          test ! -s "$tmp/dedup-source"
+
+          cp fixtures/transactions/common/source-before.mbox "$tmp/tx-source"
+          cp fixtures/transactions/common/archive-before.mbox "$tmp/tx-archive"
+          /tmp/mbox-file \
+            --source "$tmp/tx-source" \
+            --archive "$tmp/tx-archive" \
+            --header To \
+            --pattern SPEC-LIST \
+            --ignore-case \
+            --move
+          cmp fixtures/transactions/common/expected-source.mbox "$tmp/tx-source"
+          cmp fixtures/transactions/common/expected-archive.mbox "$tmp/tx-archive"
+
+          {
+            printf '%s\t%s\t%s\n' fixture.checksums PASS 'shared fixture checksum gate'
+            cat /tmp/d-core-receipt.tsv
+            printf '%s\t%s\t%s\n' copy.byte-identical PASS 'actual mbox-file move preserved the selected entry byte-for-byte'
+            printf '%s\t%s\t%s\n' copy.multiplicity PASS 'actual mbox-file move preserved all six source occurrences'
+            printf '%s\t%s\t%s\n' transaction.ordinary PASS 'actual archive-first move matched ordinary source/archive oracle'
+            printf '%s\t%s\t%s\n' transaction.prepared UNIMPLEMENTED 'no durable transaction journal'
+            printf '%s\t%s\t%s\n' transaction.mid-archive UNIMPLEMENTED 'no durable transaction journal'
+            printf '%s\t%s\t%s\n' transaction.archive-fsynced UNIMPLEMENTED 'no durable transaction journal'
+            printf '%s\t%s\t%s\n' transaction.new-source-tail UNIMPLEMENTED 'no durable transaction journal'
+            printf '%s\t%s\t%s\n' transaction.mutated-prefix-refuse UNIMPLEMENTED 'no durable transaction journal'
+          } > tests/conformance/receipt.tsv
+
+          sh tests/conformance/check-receipt.sh \
+            tests/conformance/cases.tsv \
+            tests/conformance/receipt.tsv
+          LC_ALL=C sort tests/conformance/expected.tsv > /tmp/expected.sorted
+          LC_ALL=C sort tests/conformance/receipt.tsv > /tmp/receipt.sorted
+          cmp /tmp/expected.sorted /tmp/receipt.sorted
+
+      - name: Record exact compiler boundary
+        shell: bash
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          PASS: mbox D sources compiled and unit tests executed with ICK DMD
+          ac15b23e75755773809ada172ed378555b0adffe and its matching v2.113
+          druntime/Phobos on Linux amd64.
+
+          PASS: mbox-file, mbox-inspect, file-spec-list, and the BetterC
+          SPEC-LIST planner were compiled through that ICK DMD toolchain and
+          their read-only fixture paths executed.
+
+          PASS: the same BetterC planner source produced a NetBSD amd64 ELF
+          object with the pinned ICK DMD target.
+
+          The pinned ICK revision separately has green NetBSD amd64 BetterC
+          object-generation evidence.
+
+          OUT OF SCOPE: NetBSD normal-D druntime/Phobos linking and native SDF
+          execution. Those remain a deployment qualification step.
+          EOF
+build_id\ttarget\ttoolchain\tick_revision\tick_status\tick_evidence'
+          test "$(awk -F '\t' 'NR > 1 {print $3}' ci/build-toolchain.tsv | sort -u)" = ick
+          test "$(awk -F '\t' 'NR > 1 {print $4}' ci/build-toolchain.tsv | sort -u)" =             ac15b23e75755773809ada172ed378555b0adffe
+          test "$(awk -F '\t' 'NR > 1 {print $5}' ci/build-toolchain.tsv | sort -u)" = qualified
+
 
       - name: Install bootstrap dependencies
         shell: bash
