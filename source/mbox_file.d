@@ -241,7 +241,7 @@ private bool recordMatches(R)(
     return false;
 }
 
-private MboxRecord[] selectMessages(R)(
+MboxRecord[] selectMessages(R)(
     ref File source,
     ref bool[string] wantedHeaders,
     ref R matcher
