@@ -1,0 +1,3 @@
+build_id	target	toolchain	ick_revision	ick_status	ick_evidence
+mbox-d-linux	linux-x86_64	ick	ac15b23e75755773809ada172ed378555b0adffe	qualified	receipt:dilapidated-shed/ick@ac15b23e75755773809ada172ed378555b0adffe:DMD-runtime-and-Phobos
+spec-list-plan-netbsd-object	netbsd-amd64-betterc-object	ick	ac15b23e75755773809ada172ed378555b0adffe	qualified	receipt:dilapidated-shed/ick@ac15b23e75755773809ada172ed378555b0adffe:DMD-NetBSD-amd64-BetterC
