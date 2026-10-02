@@ -15,6 +15,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: mbox-d-implementation-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   linux-normal-d:
     runs-on: ubuntu-24.04
