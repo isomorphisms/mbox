@@ -89,14 +89,14 @@ private size_t logicalLineEnd(scope const(char)[] bytes, size_t begin, size_t en
 
 private string asciiLower(scope const(char)[] s) @safe
 {
-    auto out = new char[](s.length);
+    auto result = new char[](s.length);
     foreach (i, c; s) {
         if (c >= 'A' && c <= 'Z')
-            out[i] = cast(char)(c + ('a' - 'A'));
+            result[i] = cast(char)(c + ('a' - 'A'));
         else
-            out[i] = c;
+            result[i] = c;
     }
-    return cast(string) out;
+    return cast(string) result;
 }
 
 private string trimAsciiCopy(scope const(char)[] s) @safe
@@ -115,11 +115,11 @@ private string appendFold(string previous, scope const(char)[] continuation) @sa
     auto tail = trimAsciiCopy(continuation);
     if (previous.length == 0)
         return tail;
-    auto out = new char[](previous.length + 1 + tail.length);
-    out[0 .. previous.length] = previous[];
-    out[previous.length] = ' ';
-    out[previous.length + 1 .. $] = tail[];
-    return cast(string) out;
+    auto result = new char[](previous.length + 1 + tail.length);
+    result[0 .. previous.length] = previous[];
+    result[previous.length] = ' ';
+    result[previous.length + 1 .. $] = tail[];
+    return cast(string) result;
 }
 
 private HeaderField[] parseHeaders(
@@ -187,7 +187,7 @@ private HeaderField[] parseHeaders(
 
 MessageView[] parseMbox(scope const(char)[] bytes) @safe
 {
-    MessageView[] out;
+    MessageView[] result;
     size_t pos = 0;
 
     while (pos < bytes.length) {
@@ -232,7 +232,7 @@ MessageView[] parseMbox(scope const(char)[] bytes) @safe
             bodyBegin
         );
 
-        out ~= MessageView(
+        result ~= MessageView(
             ByteRange(envelopeStart, messageStart),
             ByteRange(messageStart, nextEnvelope),
             ByteRange(messageStart, headerEnd),
@@ -243,7 +243,7 @@ MessageView[] parseMbox(scope const(char)[] bytes) @safe
         pos = nextEnvelope;
     }
 
-    return out;
+    return result;
 }
 
 HeaderField[] parseHeaderBlock(scope const(char)[] bytes) @safe
@@ -319,12 +319,12 @@ void scanMbox(ref File source, scope void delegate(in MboxRecord) emit)
 
 string[] headerValues(scope const MessageView message, scope const(char)[] name) @safe
 {
-    string[] out;
+    string[] result;
     const wanted = asciiLower(name);
     foreach (field; message.headers)
         if (!field.malformed && field.name == wanted)
-            out ~= field.unfoldedValue;
-    return out;
+            result ~= field.unfoldedValue;
+    return result;
 }
 
 private string unquoteDisplay(scope const(char)[] input) @safe
@@ -333,21 +333,21 @@ private string unquoteDisplay(scope const(char)[] input) @safe
     if (s.length < 2 || s[0] != '"' || s[$ - 1] != '"')
         return s;
 
-    char[] out;
+    char[] result;
     bool escape = false;
     foreach (c; s[1 .. $ - 1]) {
         if (escape) {
-            out ~= c;
+            result ~= c;
             escape = false;
         } else if (c == '\\') {
             escape = true;
         } else {
-            out ~= c;
+            result ~= c;
         }
     }
     if (escape)
-        out ~= '\\';
-    return cast(string) out;
+        result ~= '\\';
+    return cast(string) result;
 }
 
 private Address parseMailboxToken(scope const(char)[] token) @safe
@@ -391,7 +391,7 @@ private Address parseMailboxToken(scope const(char)[] token) @safe
 
 Address[] parseAddresses(scope const string[] fieldValues) @safe
 {
-    Address[] out;
+    Address[] result;
 
     foreach (value; fieldValues) {
         size_t start = 0;
@@ -420,7 +420,7 @@ Address[] parseAddresses(scope const string[] fieldValues) @safe
                 else if (c == ',' && angleDepth == 0) {
                     auto token = trimAsciiCopy(value[start .. i]);
                     if (token.length)
-                        out ~= parseMailboxToken(token);
+                        result ~= parseMailboxToken(token);
                     start = i + 1;
                 }
             }
@@ -428,10 +428,10 @@ Address[] parseAddresses(scope const string[] fieldValues) @safe
 
         auto token = trimAsciiCopy(value[start .. $]);
         if (token.length)
-            out ~= parseMailboxToken(token);
+            result ~= parseMailboxToken(token);
     }
 
-    return out;
+    return result;
 }
 
 Address[] recipients(scope const MessageView message) @safe

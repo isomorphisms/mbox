@@ -16,14 +16,14 @@ enum maxHeaderBytes = 4UL * 1024 * 1024;
 
 private string asciiLowerCopy(scope const(char)[] value)
 {
-    auto out = new char[](value.length);
+    auto result = new char[](value.length);
     foreach (i, c; value) {
         if (c >= 'A' && c <= 'Z')
-            out[i] = cast(char)(c + ('a' - 'A'));
+            result[i] = cast(char)(c + ('a' - 'A'));
         else
-            out[i] = c;
+            result[i] = c;
     }
-    return cast(string) out;
+    return cast(string) result;
 }
 
 private string readRange(ref File source, ByteRange range)
@@ -44,26 +44,26 @@ private string readRange(ref File source, ByteRange range)
 
 private string tsvEscape(scope const(char)[] value)
 {
-    char[] out;
+    char[] result;
     foreach (c; value) {
         switch (c) {
         case '\\':
-            out ~= "\\\\";
+            result ~= "\\\\";
             break;
         case '\t':
-            out ~= "\\t";
+            result ~= "\\t";
             break;
         case '\r':
-            out ~= "\\r";
+            result ~= "\\r";
             break;
         case '\n':
-            out ~= "\\n";
+            result ~= "\\n";
             break;
         default:
-            out ~= c;
+            result ~= c;
         }
     }
-    return cast(string) out;
+    return cast(string) result;
 }
 
 private bool wanted(

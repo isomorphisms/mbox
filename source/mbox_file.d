@@ -51,14 +51,14 @@ private string expandUser(string path)
 
 private string asciiLowerCopy(scope const(char)[] value)
 {
-    auto out = new char[](value.length);
+    auto result = new char[](value.length);
     foreach (i, c; value) {
         if (c >= 'A' && c <= 'Z')
-            out[i] = cast(char)(c + ('a' - 'A'));
+            result[i] = cast(char)(c + ('a' - 'A'));
         else
-            out[i] = c;
+            result[i] = c;
     }
-    return cast(string) out;
+    return cast(string) result;
 }
 
 private string readRange(ref File source, ByteRange range)
