@@ -1,0 +1,12 @@
+module Main
+
+import Mail.Source
+import Mail.HeaderSelection
+import Mail.SpecList
+
+main : IO ()
+main =
+    if header_block_matches spec_list_policy
+         (map source_octet [84,111,58,32,83,80,69,67,45,76,73,83,84,10,10])
+       then putStrLn "PASS searched header"
+       else putStrLn "FAIL searched header"
