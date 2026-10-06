@@ -1,0 +1,24 @@
+2026-10-06T12:45:26.3733619Z   ref: 13584adf188b8a93f5328484f59a0c9230ea496f
+2026-10-06T12:45:26.6208091Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin 13584adf188b8a93f5328484f59a0c9230ea496f
+2026-10-06T12:45:27.0475898Z  * branch            13584adf188b8a93f5328484f59a0c9230ea496f -> FETCH_HEAD
+2026-10-06T12:45:27.0605759Z [command]/usr/bin/git checkout --progress --force 13584adf188b8a93f5328484f59a0c9230ea496f
+2026-10-06T12:45:27.0713497Z Note: switching to '13584adf188b8a93f5328484f59a0c9230ea496f'.
+2026-10-06T12:45:27.0724165Z HEAD is now at 13584ad Rigorously test disposable mailbox filing and recovery
+2026-10-06T12:45:27.0818043Z 13584adf188b8a93f5328484f59a0c9230ea496f
+2026-10-06T12:45:27.2804487Z Successfully set up CPython (3.12.14)
+2026-10-06T12:45:27.3410189Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T12:45:27.3411733Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-10-06T12:45:27.3413039Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T12:45:27.3414204Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T12:45:27.3415379Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T12:45:27.3416581Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-10-06T12:45:43.9214645Z RESOURCE single_body=128MiB messages=100000 peak_one=221807 peak_many=234752 seconds=14.02
+2026-10-06T12:45:43.9217332Z Ran 23 tests in 16.197s
+2026-10-06T12:45:43.9218124Z OK
+2026-10-06T12:45:43.9578704Z   pythonLocation: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T12:45:43.9579416Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib/pkgconfig
+2026-10-06T12:45:43.9580133Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T12:45:43.9581054Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T12:45:43.9581706Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.12.14/x64
+2026-10-06T12:45:43.9582372Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.12.14/x64/lib
+2026-10-06T12:45:46.5299617Z mutation-summary	13	0

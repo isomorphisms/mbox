@@ -1,0 +1,55 @@
+command	/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3	/workspace/scratch/2d7520fd064e/kitchen/tasks/sdf-spec-list-refile/test_handoff.py
+test_exact_wrapper_from_unrelated_directories (__main__.HandoffTests.test_exact_wrapper_from_unrelated_directories) ... already-complete
+already-complete
+ok
+test_gate_rejects_post_test_drift_and_accepts_control (__main__.HandoffTests.test_gate_rejects_post_test_drift_and_accepts_control) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.922s
+
+OK
+command	/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3	/workspace/scratch/2d7520fd064e/mbox/tests/hardening/test_filing.py
+test_actual_fsync_failures_recover (__main__.FilingTests.test_actual_fsync_failures_recover) ... ok
+test_archive_verification_precedes_source_mutation (__main__.FilingTests.test_archive_verification_precedes_source_mutation) ... ok
+test_baseline_backup_corruption_and_failures (__main__.FilingTests.test_baseline_backup_corruption_and_failures) ... ok
+test_bounded_large_single_line_and_many_messages (__main__.FilingTests.test_bounded_large_single_line_and_many_messages) ... ok
+test_changed_plan_and_executor_and_partial_destination (__main__.FilingTests.test_changed_plan_and_executor_and_partial_destination) ... ok
+test_corpus_boundaries_bytes_and_selection (__main__.FilingTests.test_corpus_boundaries_bytes_and_selection) ... ok
+test_delivery_at_commit_boundary_refused (__main__.FilingTests.test_delivery_at_commit_boundary_refused) ... ok
+test_dry_run_stable_and_non_mutating (__main__.FilingTests.test_dry_run_stable_and_non_mutating) ... ok
+test_failures_and_recovery (__main__.FilingTests.test_failures_and_recovery) ... ok
+test_header_limits_and_preamble_refuse (__main__.FilingTests.test_header_limits_and_preamble_refuse) ... ok
+test_move_and_rerun_preserve_occurrences (__main__.FilingTests.test_move_and_rerun_preserve_occurrences) ... ok
+test_no_final_newline_archive_refused (__main__.FilingTests.test_no_final_newline_archive_refused) ... ok
+test_orphaned_outputs_without_journal_refused (__main__.FilingTests.test_orphaned_outputs_without_journal_refused) ... ok
+test_path_refusals (__main__.FilingTests.test_path_refusals) ... ok
+test_permissions_open_and_replace_failures (__main__.FilingTests.test_permissions_open_and_replace_failures) ... ok
+test_policy_independent_of_parser (__main__.FilingTests.test_policy_independent_of_parser) ... ok
+test_python39_syntax (__main__.FilingTests.test_python39_syntax) ... ok
+test_real_process_interruption_and_restart (__main__.FilingTests.test_real_process_interruption_and_restart) ... ok
+test_shared_original_fixture_ranges (__main__.FilingTests.test_shared_original_fixture_ranges) ... ok
+test_short_write_and_raises_after_n_bytes (__main__.FilingTests.test_short_write_and_raises_after_n_bytes) ... ok
+test_source_inside_temporary_output_refused (__main__.FilingTests.test_source_inside_temporary_output_refused) ... ok
+test_stale_source_cases (__main__.FilingTests.test_stale_source_cases) ... ok
+test_unmarked_root_and_temporary_collision (__main__.FilingTests.test_unmarked_root_and_temporary_collision) ... ok
+
+----------------------------------------------------------------------
+Ran 23 tests in 11.701s
+
+OK
+RESOURCE single_body=128MiB messages=100000 peak_one=221909 peak_many=234926 seconds=10.62
+command	/opt/codex/runtimes/codex-primary-runtime/dependencies/python/bin/python3	/workspace/scratch/2d7520fd064e/mbox/tests/hardening/mutations.py
+body-select	KILLED	test_corpus_boundaries_bytes_and_selection	f4975c702280c5b9f811695ad28b4aa3c700920a4d7618cdef9318e470f0bc7b
+omit-sender	KILLED	test_policy_independent_of_parser	eb617bc27e0e74deccc8ad074b39920466e725a899518f3d5e5c9715de5216d8
+wrong-message	KILLED	test_move_and_rerun_preserve_occurrences	0b99020aeb067f436cf43de8aaabd9e5ccae77837b01c0f13889ac9ff0ecf4d4
+drop-envelope	KILLED	test_corpus_boundaries_bytes_and_selection	b2b9e770e631316030562587d9aa5f3b9a4ff5b91171488137ca095c897bc14a
+merge-records	KILLED	test_move_and_rerun_preserve_occurrences	b61e69ba34ff007850f4ef7ac85b59e7402938bd2fce0fabeb05df32445f6183
+split-record	KILLED	test_corpus_boundaries_bytes_and_selection	34a4f266c20bcee7f26c575bee5d3c62e7971d57b0b988492df1c51b591477cd
+delete-before-verify	KILLED	test_archive_verification_precedes_source_mutation	e14a18b4310af048f16fad94b282dbb0d66aa7e628173b247172f24a9c57ea19
+stale-rewrite	KILLED	test_stale_source_cases	654e22c9220e3700a18468c56ee8d8731905934422a3ffb872e4919b145b0fa7
+drop-keeper	KILLED	test_move_and_rerun_preserve_occurrences	c7919c290e32e500f5ee7d6691189cb7391555b5110155978f93ba83d75ed26a
+duplicate-selected	KILLED	test_move_and_rerun_preserve_occurrences	33c1827661c66e9e69eac46402123a2edf8571f562c38baefb835d822ad28091
+interchange-live-spool	KILLED	test_path_refusals	141726b20ccca40ba3d2ecf90669b22c2121479d9e795ed5dc5961dbcff32ab3
+accept-alias	KILLED	test_path_refusals	b1a68b865a17d39e58fefceefdcf56b67a69b0f62f5493a9871488d2d5f07f4d
+partial-write-success	KILLED	test_short_write_and_raises_after_n_bytes	d8decd641bfa546137748e6dcb1573eccab983541060ef052a33a84e6280dfbb
+mutation-summary	13	0
