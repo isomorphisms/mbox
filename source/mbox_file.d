@@ -457,6 +457,13 @@ int runMboxFile(string[] arguments)
             return 0;
         }
 
+        // This executor has neither verified archive readback nor durable
+        // occurrence-bound transaction recovery. Dotlock plus fsync is not
+        // evidence of the actual SDF delivery protocol. Keep its CLI read-only
+        // until the shared disposable hardening corpus qualifies this path.
+        enforce(!move,
+            "mbox-file: move disabled: archive verification, recovery and target delivery locks are unqualified");
+
         enforce(arguments.length == 1,
             "mbox-file: unexpected positional arguments");
         enforce(sourcePath.length != 0,
