@@ -2,6 +2,11 @@
 
 A small, byte-preserving email library.
 
+The disposable filing hardening corpus, executable reference, failure/restart
+contract and mutation regressions are described in
+[tests/hardening/README.md](tests/hardening/README.md). This Python reference
+does not qualify the separate Idriç or D executors for live mail.
+
 The first target is the Unix mbox + RFC-message slice needed to inspect and
 refile a long-lived mailbox without depending on Python.  Python's standard
 `mailbox` and `email` modules are a behavioral reference, not the API to copy.
