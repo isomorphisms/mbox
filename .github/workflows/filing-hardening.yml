@@ -17,4 +17,5 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python tests/hardening/test_filing.py
+      - run: python tests/hardening/test_inventory.py
       - run: python tests/hardening/mutations.py
