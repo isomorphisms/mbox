@@ -1,0 +1,159 @@
+module Mail.Index.EntryDigestIO
+
+import Data.Buffer
+import Data.Text
+import System.File
+import Mail.Index.Plaintext
+import Mail.Index.Sha256
+
+-- A second, read-only pass validates EVERY indexed occurrence, including
+-- byte-identical duplicates, against the actual source. It never copies mail.
+
+block_size : Int
+block_size = 65536
+
+clean_line : Text → Text
+clean_line raw =
+    pack (reverse (dropWhile
+        (\ch => ch ≟ '\n' || ch ≟ '\r') (reverse (unpack raw))))
+
+hash_buffer_twice :
+    Buffer →
+    Number →
+    Int →
+    HashState →
+    HashState →
+    IO (Either Text (HashState, HashState))
+hash_buffer_twice buffer 0 offset whole one =
+    pure (Right (whole, one))
+hash_buffer_twice buffer (S remaining) offset whole one = do
+    byte ← getBits8 buffer offset
+    case (update_octet whole byte, update_octet one byte) of
+        (Right next_whole, Right next_one) =>
+            hash_buffer_twice buffer remaining (offset + 1)
+                next_whole next_one
+        (Left problem, _) => pure (Left problem)
+        (_, Left problem) => pure (Left problem)
+
+-- Request at most one 64 KiB fragment: conversion to Int happens AFTER
+-- bounding a Number, so a 4.4 GB offset cannot overflow this boundary.
+requested_bytes : Number → Int
+requested_bytes remaining =
+    if remaining > 65536 then block_size else cast remaining
+
+covering
+hash_exact_entry :
+    File →
+    Buffer →
+    Number →
+    HashState →
+    HashState →
+    IO (Either Text (HashState, Text))
+hash_exact_entry source buffer 0 whole entry =
+    case finish_hash entry of
+        Left problem => pure (Left problem)
+        Right digest => pure (Right (whole, digest))
+hash_exact_entry source buffer remaining whole entry = do
+    next ← readBufferData source buffer 0 (requested_bytes remaining)
+    case next of
+        Left _ => pure (Left "cannot read indexed entry")
+        Right 0 => pure (Left "mailbox shortened inside indexed entry")
+        Right count =>
+            case !(hash_buffer_twice
+                buffer (cast count) 0 whole entry) of
+                Left problem => pure (Left problem)
+                Right (next_whole, next_entry) =>
+                    hash_exact_entry source buffer
+                        (remaining - cast count)
+                        next_whole next_entry
+
+public export
+record EntryHashReceipt where
+    constructor CheckedHashes
+    messages : Number
+    selected_messages : Number
+    selected_bytes : Number
+    source_sha256 : Text
+
+covering
+check_each_entry :
+    File →
+    File →
+    Buffer →
+    Number →
+    Text →
+    AuditProgress →
+    HashState →
+    IO (Either Text EntryHashReceipt)
+check_each_entry source entries buffer source_bytes expected progress whole = do
+    line ← fGetLine entries
+    case line of
+        Left _ => pure (Left "cannot read index for per-entry hashing")
+        Right "" => do
+            reached_end ← fEOF entries
+            if not reached_end then pure (Left "blank entry line")
+            else if not (reaches_end source_bytes progress)
+                 then pure (Left "indexed ranges do not cover source")
+            else do
+                extra ← readBufferData source buffer 0 1
+                case extra of
+                    Left _ => pure (Left "cannot check source end")
+                    Right 0 =>
+                        case finish_hash whole of
+                            Left problem => pure (Left problem)
+                            Right digest =>
+                                if digest ≟ expected
+                                   then pure (Right
+                                       (CheckedHashes
+                                           (observed_messages progress)
+                                           (selected_count progress)
+                                           (selected_octets progress)
+                                           digest))
+                                   else pure (Left "whole source SHA-256 mismatch")
+                    Right _ => pure (Left "mailbox appended after index snapshot")
+        Right line =>
+            case decode_row source_bytes progress (clean_line line) of
+                Left problem => pure (Left problem)
+                Right (row, next_progress) => do
+                    hashed ← hash_exact_entry source buffer
+                        (end_octet row - start_octet row)
+                        whole initial_hash
+                    case hashed of
+                        Left problem => pure (Left problem)
+                        Right (next_whole, digest) =>
+                            if not (digest ≟ digest_hex row)
+                               then pure (Left
+                                   ("occurrence SHA-256 mismatch: " ++
+                                       show (ordinal row)))
+                               else check_each_entry
+                                    source entries buffer source_bytes
+                                    expected next_progress next_whole
+
+export
+covering
+verify_entry_hashes :
+    Text →
+    Text →
+    Number →
+    Text →
+    IO (Either Text EntryHashReceipt)
+verify_entry_hashes source_path messages_path source_bytes expected = do
+    opened ← openFile source_path Read
+    case opened of
+        Left _ => pure (Left "cannot re-open source for entry verification")
+        Right source => do
+            opened_index ← openFile messages_path Read
+            case opened_index of
+                Left _ => do
+                    closeFile source
+                    pure (Left "cannot re-open messages.tsv")
+                Right entries => do
+                    allocated ← newBuffer block_size
+                    result ← case allocated of
+                        Nothing => pure (Left "cannot allocate entry verifier buffer")
+                        Just buffer =>
+                            check_each_entry source entries buffer
+                                source_bytes expected initial_progress initial_hash
+                    closeFile entries
+                    closeFile source
+                    pure result
