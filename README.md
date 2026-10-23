@@ -37,6 +37,14 @@ Inventory performs no copying, filing, indexing or deletion. If the source
 metadata changes during the scan, results are labeled `CHANGED_DURING_SCAN`
 and must not be used as a stable basis for moving mail.
 
+## Private plaintext mailbox indices on SDF
+
+The read-only sidecar indexer generates private TSV indices for messages,
+SPEC-LIST occurrences, senders, dates, and subjects. It records exact byte
+ranges and SHA-256 digests, verifies the source and preserves duplicates.
+See [SDF setup and verification](docs/SDF-PLAINTEXT-INDEX.md).
+It **does not** modify the mailbox or configure Mutt.
+
 ## First contract
 
 The library is split at a hard boundary:
