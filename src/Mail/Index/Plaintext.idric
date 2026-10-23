@@ -1,0 +1,179 @@
+module Mail.Index.Plaintext
+
+import Data.Text
+import Data.List
+
+-- The on-disk TSV is untrusted input, even when another executable printed
+-- VERIFIED. This module decides whether each row is a *valid occurrence*.
+-- No constructor of AuditedRow is exported: all entry points use decode_row.
+
+public export
+record IndexedOccurrence where
+    constructor Occurrence
+    ordinal : Number
+    start_octet : Number
+    end_octet : Number
+    digest_hex : Text
+    matching_headers : Text
+
+public export
+record AuditProgress where
+    constructor Progress
+    next_ordinal : Number
+    next_octet : Number
+    selected_count : Number
+    selected_octets : Number
+
+public export
+initial_progress : AuditProgress
+initial_progress = Progress 1 0 0 0
+
+split_on : Char → List Char → List Char → List Text
+split_on separator reversed [] = [pack (reverse reversed)]
+split_on separator reversed (ch :: rest) =
+    if ch ≟ separator
+       then pack (reverse reversed) :: split_on separator [] rest
+       else split_on separator (ch :: reversed) rest
+
+public export
+fields_of : Text → List Text
+fields_of value = split_on '\t' [] (unpack value)
+
+digit : Char → Maybe Number
+digit '0' = Just 0
+digit '1' = Just 1
+digit '2' = Just 2
+digit '3' = Just 3
+digit '4' = Just 4
+digit '5' = Just 5
+digit '6' = Just 6
+digit '7' = Just 7
+digit '8' = Just 8
+digit '9' = Just 9
+digit _ = Nothing
+
+read_digits : List Char → Number → Maybe Number
+read_digits [] value = Just value
+read_digits (ch :: rest) value =
+    case digit ch of
+        Nothing => Nothing
+        Just figure => read_digits rest (value * 10 + figure)
+
+-- Reject negative values, surrounding whitespace, and noncanonical zero
+-- padding. Number is unbounded, so 4.4 GiB ranges cannot overflow an Int.
+public export
+read_number : Text → Maybe Number
+read_number value =
+    case unpack value of
+        [] => Nothing
+        chars =>
+            case read_digits chars 0 of
+                Nothing => Nothing
+                Just parsed =>
+                    if show parsed ≟ value
+                       then Just parsed
+                       else Nothing
+
+is_hex : Char → Bool
+is_hex ch =
+    (ch >= '0' && ch <= '9') ||
+    (ch >= 'a' && ch <= 'f')
+
+public export
+valid_digest : Text → Bool
+valid_digest value =
+    length (unpack value) ≟ 64 && all is_hex (unpack value)
+
+recognized_header : Text → Bool
+recognized_header "cc" = True
+recognized_header "from" = True
+recognized_header "reply-to" = True
+recognized_header "sender" = True
+recognized_header "subject" = True
+recognized_header "to" = True
+recognized_header _ = False
+
+strictly_ascending : List Text → Bool
+strictly_ascending [] = True
+strictly_ascending [_] = True
+strictly_ascending (before :: after :: rest) =
+    before < after && strictly_ascending (after :: rest)
+
+public export
+valid_matching_headers : Text → Bool
+valid_matching_headers "-" = True
+valid_matching_headers value =
+    let names = split_on ',' [] (unpack value)
+    in all recognized_header names && strictly_ascending names
+
+public export
+is_selected : IndexedOccurrence → Bool
+is_selected row = not (matching_headers row ≟ "-")
+
+-- Every range is positive, contiguous, and bounded by the source snapshot.
+-- The checks happen before constructing an IndexedOccurrence.
+public export
+decode_row :
+    (source_bytes : Number) →
+    AuditProgress →
+    Text →
+    Either Text (IndexedOccurrence, AuditProgress)
+decode_row source_bytes progress line =
+    case fields_of line of
+        [ordinal_text, start_text, end_text, length_text, digest, matching] =>
+            case (read_number ordinal_text,
+                  read_number start_text,
+                  read_number end_text,
+                  read_number length_text) of
+                (Just ordinal, Just begins, Just ends, Just count) =>
+                    if not (ordinal ≟ next_ordinal progress)
+                       then Left "ordinal discontinuity"
+                    else if not (begins ≟ next_octet progress)
+                       then Left "source gap or overlap"
+                    else if ends <= begins || ends > source_bytes
+                       then Left "entry range outside source"
+                    else if not (ends - begins ≟ count)
+                       then Left "entry byte-count mismatch"
+                    else if not (valid_digest digest)
+                       then Left "invalid SHA-256 text"
+                    else if not (valid_matching_headers matching)
+                       then Left "invalid or unordered selector names"
+                    else
+                        let selected = not (matching ≟ "-")
+                            next = Progress
+                                       (ordinal + 1)
+                                       ends
+                                       (selected_count progress +
+                                            if selected then 1 else 0)
+                                       (selected_octets progress +
+                                            if selected then count else 0)
+                        in Right
+                               (Occurrence ordinal begins ends digest matching,
+                                next)
+                _ => Left "noncanonical decimal field"
+        _ => Left "messages.tsv requires exactly six fields"
+
+public export
+list_record : IndexedOccurrence → Text
+list_record row =
+    joinBy "\t"
+        [ "spec-list"
+        , show (ordinal row)
+        , show (start_octet row)
+        , show (end_octet row)
+        , digest_hex row
+        , matching_headers row
+        ]
+
+public export
+check_list_record : IndexedOccurrence → Text → Bool
+check_list_record row line =
+    is_selected row && list_record row ≟ line
+
+public export
+reaches_end : Number → AuditProgress → Bool
+reaches_end source_bytes progress = next_octet progress ≟ source_bytes
+
+public export
+observed_messages : AuditProgress → Number
+observed_messages progress = next_ordinal progress - 1
