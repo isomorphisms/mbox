@@ -18,4 +18,5 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: python tests/hardening/test_filing.py
       - run: python tests/hardening/test_inventory.py
+      - run: python -m unittest discover -s tests -p 'test_spec_list_inventory.py'
       - run: python tests/hardening/mutations.py
