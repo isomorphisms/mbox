@@ -5,7 +5,7 @@ import Data.List
 
 -- The on-disk TSV is untrusted input, even when another executable printed
 -- VERIFIED. This module decides whether each row is a *valid occurrence*.
--- No constructor of AuditedRow is exported: all entry points use decode_row.
+-- Validation occurs only through decode_row. The record is not a proof of\n-- provenance or authorization to mutate mail.
 
 public export
 record IndexedOccurrence where
@@ -143,10 +143,8 @@ decode_row source_bytes progress line =
                             next = Progress
                                        (ordinal + 1)
                                        ends
-                                       (selected_count progress +
-                                            if selected then 1 else 0)
-                                       (selected_octets progress +
-                                            if selected then count else 0)
+                                       (selected_count progress + (if selected then 1 else 0))
+                                       (selected_octets progress + (if selected then count else 0))
                         in Right
                                (Occurrence ordinal begins ends digest matching,
                                 next)
