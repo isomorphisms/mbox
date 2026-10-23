@@ -16,6 +16,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: idric-index-audit-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   typecheck-and-fixture:
     runs-on: ubuntu-latest
@@ -55,6 +59,21 @@ jobs:
         if: steps.idric-cache.outputs.cache-hit != 'true'
         working-directory: idric
         run: ./edric bootstrap
+      - name: Cache Idriç compiler after bootstrap
+        if: steps.idric-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            idric/_/.tools
+            idric/_/bootstrap-build
+            idric/_/build
+            idric/_/libs/prelude/build
+            idric/_/libs/base/build
+            idric/_/libs/contrib/build
+            idric/_/libs/linear/build
+            idric/_/libs/network/build
+            idric/_/libs/test/build
+          key: idric-linux-51e3892d4de59943e42e65c60a9814aba792c5d4-v1
       - name: Compile and run Idriç index row checks
         run: |
           support="$GITHUB_WORKSPACE/idric/_"
