@@ -68,6 +68,9 @@ jobs:
             "$support/build/exec/idris2" IndexRowFixtures.idric -o index-row-fixtures
             ./build/exec/index-row-fixtures | tee ../index-row.out
             grep -Fx 'PASS Idriç plaintext index row invariants' ../index-row.out
+            "$support/build/exec/idris2" Sha256Fixtures.idric -o idric-sha256-fixtures
+            ./build/exec/idric-sha256-fixtures | tee ../idric-sha256-fixtures.out
+            grep -Fx 'PASS Idriç streaming SHA-256 vectors and partitions' ../idric-sha256-fixtures.out
             "$support/build/exec/idris2" IndexAudit.idric -o idric-index-audit
           )
       - name: Build plaintext reference index on disposable fixture
