@@ -10,6 +10,7 @@ import Mail.MboxSelection
 import Mail.SpecList
 import Mail.Index.Plaintext
 import Mail.Index.HashIO
+import Mail.Index.EntryDigestIO
 
 -- READ-ONLY: independently reframe the mailbox and compare every selected
 -- occurrence with the existing plaintext TSV snapshot. No writing or deletion.
@@ -132,13 +133,18 @@ covering
 check_snapshot_hashes :
     Text → Text → Manifest → IO (Either Text ())
 check_snapshot_hashes snapshot mailbox_path manifest = do
-    source ← hash_file mailbox_path
-    case source of
+    checked ← verify_entry_hashes
+        mailbox_path
+        (snapshot ++ "/messages.tsv")
+        (bytes manifest)
+        (source_sha256 manifest)
+    case checked of
         Left problem => pure (Left problem)
-        Right hashed =>
-            if not (octets hashed ≟ bytes manifest &&
-                    sha256_hex hashed ≟ source_sha256 manifest)
-               then pure (Left "whole mailbox SHA-256 differs from source.state")
+        Right receipt =>
+            if not (messages receipt ≟ messages manifest &&
+                    selected_messages receipt ≟ selected manifest &&
+                    selected_bytes receipt ≟ selected_bytes manifest)
+               then pure (Left "occurrence hash audit summary mismatch")
                else do
                    state ← readFile (snapshot ++ "/source.state")
                    case state of
@@ -319,7 +325,7 @@ audit snapshot mailbox_path = do
                                                                 Right () => do
                                                                     putStrLn "WHOLE_SOURCE_SHA256\tMATCH"
                                                                     putStrLn "SIDECAR_SHA256\tMATCH"
-                                                                    putStrLn "PER_OCCURRENCE_SHA256\tNOT_INDEPENDENTLY_CHECKED"
+                                                                    putStrLn "PER_OCCURRENCE_SHA256\tMATCH"
                                                                     putStrLn "LIVE_MAIL_MOVE\tDISABLED"
 
 usage : IO ()
