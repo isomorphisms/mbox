@@ -11,6 +11,32 @@ The first target is the Unix mbox + RFC-message slice needed to inspect and
 refile a long-lived mailbox without depending on Python.  Python's standard
 `mailbox` and `email` modules are a behavioral reference, not the API to copy.
 
+## Read-only SPEC-LIST inventory on SDF
+
+Use the SDF `python` command if `python3` is not on the path:
+
+```sh
+python bin/spec-list-inventory.py --source /var/mail/isomorphisms --examples 0
+```
+
+The optimized inventory scans mailbox bodies in 1 MiB binary blocks using a
+native byte search instead of calling Python `readline()` for every body line.
+Only envelopes and headers are read linewise. Header memory remains bounded by
+the 4 MiB hardening limit. It still reads **all** mailbox bytes to locate
+mboxo separators; `--examples 0` omits samples but does not omit work.
+Progress is printed to **stderr** every 256 MiB; `--progress-mib 0`
+disables it. Standard output retains the original TSV report format.
+
+`bin/spec-list-inventory-reference.py` preserves the original linewise
+implementation for differential tests. Run
+`python -m unittest discover -s tests -p 'test_spec_list_inventory.py'`
+to compare header selection, message counts and exact byte offsets across
+arbitrary body read sizes.
+
+Inventory performs no copying, filing, indexing or deletion. If the source
+metadata changes during the scan, results are labeled `CHANGED_DURING_SCAN`
+and must not be used as a stable basis for moving mail.
+
 ## First contract
 
 The library is split at a hard boundary:
