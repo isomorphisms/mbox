@@ -115,5 +115,7 @@ jobs:
             "$GITHUB_WORKSPACE/fixture-index/snapshots/$snap" \
             "$GITHUB_WORKSPACE/mbox/fixtures/spec-list-selection.mbox" | tee idric-index-audit.out
           grep -Fx "$(printf 'INDEX_SELECTION_MATCH\tIdriç vs plaintext')" idric-index-audit.out
-          grep -Fx "$(printf 'CRYPTOGRAPHIC_VERIFICATION\tNOT_IMPLEMENTED')" idric-index-audit.out
+          grep -Fx "$(printf 'WHOLE_SOURCE_SHA256\tMATCH')" idric-index-audit.out
+          grep -Fx "$(printf 'SIDECAR_SHA256\tMATCH')" idric-index-audit.out
+          grep -Fx "$(printf 'PER_OCCURRENCE_SHA256\tMATCH')" idric-index-audit.out
           grep -Fx "$(printf 'LIVE_MAIL_MOVE\tDISABLED')" idric-index-audit.out
