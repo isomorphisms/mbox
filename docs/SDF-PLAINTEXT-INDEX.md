@@ -3,18 +3,20 @@
 This is a read-only index of the byte content of /var/mail/isomorphisms,
 not a mail mover and not a Mutt cache.
 
-On the SDF shell. If ~/opt/mbox is a Git checkout, update it in place;
-otherwise, clone only the program into a separate directory:
+On the SDF shell. This does not assume ~/opt/mbox is a Git checkout.
+Paste the whole block; it runs in its own shell so an error will not log
+out the interactive SDF session:
 
-    set -e
+    sh <<'SH'
+    set -eu
     umask 077
     python -c 'import sys; assert sys.version_info >= (3, 7)'
-    if git -C "$HOME/opt/mbox" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    if [ -e "$HOME/opt/mbox/.git" ]; then
       work="$HOME/opt/mbox"
       git -C "$work" pull --ff-only
     else
       work="$HOME/opt/mbox-index-code"
-      if [ -d "$work/.git" ]; then
+      if [ -e "$work/.git" ]; then
         git -C "$work" pull --ff-only
       else
         git clone --depth 1 https://github.com/isomorphisms/mbox.git "$work"
@@ -24,6 +26,7 @@ otherwise, clone only the program into a separate directory:
     python -m unittest discover -s tests -p 'test_plaintext_index.py'
     python bin/plaintext-index.py build --source /var/mail/isomorphisms --out "$HOME/opt/mbox/index"
     python bin/plaintext-index.py verify --source /var/mail/isomorphisms --out "$HOME/opt/mbox/index"
+    SH
 
 SDF has previously exposed Python as 'python' rather than 'python3'.
 This tool needs Python 3.7 or later, its standard library, and a POSIX
