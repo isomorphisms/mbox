@@ -1,0 +1,240 @@
+module Mail.Index.Sha256
+
+import Data.Bits
+import Data.List
+import Data.Text
+
+-- Pure, streaming SHA-256 reference in Idriç. No Python, shell hash utility,
+-- OpenSSL, or C FFI. This is a correctness oracle first; 4.4 GB performance
+-- must be measured before use on a shared NetBSD machine.
+
+record Words where
+    constructor Eight
+    a : Bits32
+    b : Bits32
+    c : Bits32
+    d : Bits32
+    e : Bits32
+    f : Bits32
+    g : Bits32
+    h : Bits32
+
+initial_words : Words
+initial_words = Eight
+    0x6a09e667 0xbb67ae85 0x3c6ef372 0xa54ff53a
+    0x510e527f 0x9b05688c 0x1f83d9ab 0x5be0cd19
+
+round_constants : List Bits32
+round_constants =
+    [ 0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5
+    , 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5
+    , 0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3
+    , 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174
+    , 0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc
+    , 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da
+    , 0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7
+    , 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967
+    , 0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13
+    , 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85
+    , 0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3
+    , 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070
+    , 0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5
+    , 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3
+    , 0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208
+    , 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+    ]
+
+rotate_right : Bits32 → Fin 32 → Bits32
+rotate_right = rotR
+
+little_sigma_zero : Bits32 → Bits32
+little_sigma_zero w =
+    rotate_right w 7 `xor` rotate_right w 18 `xor` (w `shiftR` 3)
+
+little_sigma_one : Bits32 → Bits32
+little_sigma_one w =
+    rotate_right w 17 `xor` rotate_right w 19 `xor` (w `shiftR` 10)
+
+big_sigma_zero : Bits32 → Bits32
+big_sigma_zero w =
+    rotate_right w 2 `xor` rotate_right w 13 `xor` rotate_right w 22
+
+big_sigma_one : Bits32 → Bits32
+big_sigma_one w =
+    rotate_right w 6 `xor` rotate_right w 11 `xor` rotate_right w 25
+
+choose : Bits32 → Bits32 → Bits32 → Bits32
+choose x y z = (x .&. y) `xor` ((complement x) .&. z)
+
+majority : Bits32 → Bits32 → Bits32 → Bits32
+majority x y z = (x .&. y) `xor` (x .&. z) `xor` (y .&. z)
+
+combine_four : Bits8 → Bits8 → Bits8 → Bits8 → Bits32
+combine_four first second third fourth =
+    ((cast first : Bits32) `shiftL` 24) .|.
+    ((cast second : Bits32) `shiftL` 16) .|.
+    ((cast third : Bits32) `shiftL` 8) .|.
+    (cast fourth : Bits32)
+
+read_words : List Bits8 → Maybe (List Bits32)
+read_words [] = Just []
+read_words (first :: second :: third :: fourth :: rest) =
+    case read_words rest of
+        Nothing => Nothing
+        Just remaining => Just
+            (combine_four first second third fourth :: remaining)
+read_words _ = Nothing
+
+nth_word : Number → List Bits32 → Maybe Bits32
+nth_word 0 (word :: _) = Just word
+nth_word (S position) (_ :: rest) = nth_word position rest
+nth_word _ _ = Nothing
+
+-- This rejects missing schedule words instead of silently substituting zero.
+expand_schedule : Number → List Bits32 → Maybe (List Bits32)
+expand_schedule 0 expanded = Just expanded
+expand_schedule (S remaining) expanded =
+    let size = length expanded
+    in case (nth_word (size - 2) expanded,
+             nth_word (size - 7) expanded,
+             nth_word (size - 15) expanded,
+             nth_word (size - 16) expanded) of
+        (Just recent_two, Just recent_seven,
+         Just recent_fifteen, Just recent_sixteen) =>
+            let next = little_sigma_one recent_two + recent_seven
+                       + little_sigma_zero recent_fifteen + recent_sixteen
+            in expand_schedule remaining (expanded ++ [next])
+        _ => Nothing
+
+one_round : Words → Bits32 → Bits32 → Words
+one_round (Eight a b c d e f g h) constant word =
+    let first = h + big_sigma_one e + choose e f g + constant + word
+        second = big_sigma_zero a + majority a b c
+    in Eight (first + second) a b c (d + first) e f g
+
+process_rounds : Words → List Bits32 → List Bits32 → Maybe Words
+process_rounds current [] [] = Just current
+process_rounds current (constant :: remaining_constants)
+    (word :: remaining_words) =
+        process_rounds
+            (one_round current constant word)
+            remaining_constants remaining_words
+process_rounds _ _ _ = Nothing
+
+combine_hash : Words → Words → Words
+combine_hash
+    (Eight a0 b0 c0 d0 e0 f0 g0 h0)
+    (Eight a1 b1 c1 d1 e1 f1 g1 h1) =
+        Eight
+            (a0 + a1) (b0 + b1) (c0 + c1) (d0 + d1)
+            (e0 + e1) (f0 + f1) (g0 + g1) (h0 + h1)
+
+compress_block : Words → List Bits8 → Either Text Words
+compress_block current block =
+    case read_words block of
+        Nothing => Left "SHA-256 requires whole four-octet words"
+        Just first_words =>
+            if not (length first_words ≟ 16)
+               then Left "SHA-256 block must contain 64 octets"
+               else case expand_schedule 48 first_words of
+                   Nothing => Left "SHA-256 schedule construction failed"
+                   Just schedule =>
+                       case process_rounds current round_constants schedule of
+                           Nothing => Left "SHA-256 round count mismatch"
+                           Just changed => Right (combine_hash current changed)
+
+public export
+record HashState where
+    constructor Hashing
+    -- Kept private to the implementation; do not serialize this representation.
+    total_octets : Number
+    pending_count : Number
+    pending_reversed : List Bits8
+    words : Words
+
+public export
+initial_hash : HashState
+initial_hash = Hashing 0 0 [] initial_words
+
+public export
+update_octet : HashState → Bits8 → Either Text HashState
+update_octet state octet =
+    let next_length = total_octets state + 1
+        count = pending_count state + 1
+        collected = octet :: pending_reversed state
+    in if count ≟ 64
+          then case compress_block (words state) (reverse collected) of
+               Left problem => Left problem
+               Right hashed => Right (Hashing next_length 0 [] hashed)
+          else Right (Hashing next_length count collected (words state))
+
+public export
+update_octets : HashState → List Bits8 → Either Text HashState
+update_octets state [] = Right state
+update_octets state (octet :: rest) =
+    case update_octet state octet of
+        Left problem => Left problem
+        Right next => update_octets next rest
+
+length_octet : Bits64 → Fin 64 → Bits8
+length_octet length shift =
+    cast ((length `shiftR` shift) .&. 0xff)
+
+hex_digit : Number → Char
+hex_digit 0 = '0'
+hex_digit 1 = '1'
+hex_digit 2 = '2'
+hex_digit 3 = '3'
+hex_digit 4 = '4'
+hex_digit 5 = '5'
+hex_digit 6 = '6'
+hex_digit 7 = '7'
+hex_digit 8 = '8'
+hex_digit 9 = '9'
+hex_digit 10 = 'a'
+hex_digit 11 = 'b'
+hex_digit 12 = 'c'
+hex_digit 13 = 'd'
+hex_digit 14 = 'e'
+hex_digit 15 = 'f'
+hex_digit _ = '?'
+
+hex_word : Bits32 → Text
+hex_word word =
+    pack (map
+        (\shift => hex_digit
+            (cast ((word `shiftR` shift) .&. 0x0f)))
+        [28, 24, 20, 16, 12, 8, 4, 0])
+
+digest_hex : Words → Text
+digest_hex (Eight a b c d e f g h) =
+    hex_word a ++ hex_word b ++ hex_word c ++ hex_word d ++
+    hex_word e ++ hex_word f ++ hex_word g ++ hex_word h
+
+-- At most two padded blocks are processed. The encoded message length is
+-- in bits, big-endian, modulo 2^64, as required by SHA-256.
+public export
+finish_hash : HashState → Either Text Text
+finish_hash state =
+    let count = pending_count state
+        zero_padding = if count < 56
+                          then 55 - count
+                          else 119 - count
+        length_bits = (cast (total_octets state * 8) : Bits64)
+        suffix =
+            [0x80] ++ replicate zero_padding 0x00 ++
+            map (length_octet length_bits)
+                [56, 48, 40, 32, 24, 16, 8, 0]
+    in case update_octets state suffix of
+        Left problem => Left problem
+        Right final =>
+            if pending_count final ≟ 0
+               then Right (digest_hex (words final))
+               else Left "SHA-256 padding did not fill a block"
+
+public export
+hash_octets : List Bits8 → Either Text Text
+hash_octets octets =
+    case update_octets initial_hash octets of
+        Left problem => Left problem
+        Right state => finish_hash state
