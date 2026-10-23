@@ -66,7 +66,7 @@ manifest_value wanted (line :: rest) =
 
 record Manifest where
     constructor ExistingManifest
-    path : Text
+    source_path : Text
     bytes : Number
     messages : Number
     selected : Number
@@ -111,10 +111,10 @@ check_scanned row [] =
     if is_selected row
        then Left "indexed selection absent from Idriç scan"
        else Right []
-check_scanned row remaining@(SelectedOccurrenceAt ordinal
+check_scanned row remaining@(SelectedOccurrenceAt framed_ordinal
     (Octets (AtOctet begins) (AtOctet ends)) :: rest) =
     if not (is_selected row) then Right remaining
-    else if ordinal + 1 ≟ ordinal row
+    else if framed_ordinal + 1 ≟ ordinal row
          && begins ≟ start_octet row
          && ends ≟ end_octet row
          then Right rest
@@ -192,19 +192,19 @@ check_index snapshot size selected = do
 
 covering
 audit : Text → Text → IO ()
-audit snapshot path = do
+audit snapshot mailbox_path = do
     expected ← read_manifest (snapshot ++ "/source.state")
     case expected of
         Left problem => do
             putStrLn ("REFUSED\t" ++ problem)
             exitFailure
         Right manifest => do
-            if not (path ≟ Manifest.path manifest)
+            if not (mailbox_path ≟ source_path manifest)
                then do
                    putStrLn "REFUSED\tsource path differs from snapshot"
                    exitFailure
                else pure ()
-            opened ← openFile path Read
+            opened ← openFile mailbox_path Read
             case opened of
                 Left _ => do
                     putStrLn "REFUSED\tcannot open source mailbox"
