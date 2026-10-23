@@ -1,0 +1,78 @@
+module Main
+
+import Data.Text
+import System
+import Mail.Index.Plaintext
+
+digest : Text
+digest = pack (replicate 64 'a')
+
+selected_row : Text
+selected_row =
+    "1\t0\t25\t25\t" ++ digest ++ "\tfrom,subject"
+
+other_row : Text
+other_row =
+    "2\t25\t50\t25\t" ++ digest ++ "\t-"
+
+wrong_length : Text
+wrong_length =
+    "1\t0\t25\t24\t" ++ digest ++ "\tfrom"
+
+wrong_headers : Text
+wrong_headers =
+    "1\t0\t25\t25\t" ++ digest ++ "\tsubject,from"
+
+bad_overlap : Text
+bad_overlap =
+    "2\t24\t50\t26\t" ++ digest ++ "\t-"
+
+rejected : Either Text a → Bool
+rejected (Left _) = True
+rejected (Right _) = False
+
+check_rows : Bool
+check_rows =
+    case decode_row 50 initial_progress selected_row of
+        Left _ => False
+        Right (first, next) =>
+            case decode_row 50 next other_row of
+                Left _ => False
+                Right (second, finished) =>
+                    and
+                       [ is_selected first
+                       , not (is_selected second)
+                       , check_list_record
+                             first
+                             ("spec-list\t1\t0\t25\t" ++ digest ++ "\tfrom,subject")
+                       , not (check_list_record second "")
+                       , observed_messages finished ≟ 2
+                       , selected_count finished ≟ 1
+                       , selected_octets finished ≟ 25
+                       , reaches_end 50 finished
+                       , rejected (decode_row 50 next bad_overlap)
+                       ]
+
+check_rejections : Bool
+check_rejections =
+    and
+       [ rejected (decode_row 50 initial_progress wrong_length)
+       , rejected (decode_row 50 initial_progress wrong_headers)
+       , rejected (decode_row 50 initial_progress
+                      ("1\t0\t51\t51\t" ++ digest ++ "\t-"))
+       , rejected (decode_row 50 initial_progress
+                      ("01\t0\t25\t25\t" ++ digest ++ "\t-"))
+       , rejected (decode_row 50 initial_progress
+                      ("1\t0\t25\t25\t" ++ "bad" ++ "\t-"))
+       , read_number "4433384703" ≟ Just 4433384703
+       , read_number "0000" ≟ Nothing
+       , read_number "-1" ≟ Nothing
+       ]
+
+main : IO ()
+main =
+    if check_rows && check_rejections
+       then putStrLn "PASS Idriç plaintext index row invariants"
+       else do
+           putStrLn "FAIL Idriç plaintext index row invariants"
+           exitFailure

@@ -1,0 +1,27 @@
+module Main
+
+import Data.Text
+import System
+import Mail.Index.HashIO
+
+main : IO ()
+main = do
+    args ← getArgs
+    case args of
+        [program, source] => do
+            result ← hash_file source
+            case result of
+                Right digest =>
+                    if octets digest ≟ 3
+                       && sha256_hex digest ≟
+                          "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+                       then putStrLn "PASS Idriç SHA-256 streaming file I/O"
+                       else do
+                           putStrLn "FAIL Idriç SHA-256 byte count or digest"
+                           exitFailure
+                Left problem => do
+                    putStrLn ("FAIL Idriç SHA-256: " ++ problem)
+                    exitFailure
+        _ => do
+            putStrLn "usage: idric-hash-io-fixture PATH_CONTAINING_ASCII_ABC"
+            exitFailure

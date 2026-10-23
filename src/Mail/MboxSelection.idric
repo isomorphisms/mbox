@@ -398,3 +398,9 @@ selected_ranges :
 selected_ranges [] = []
 selected_ranges (SelectedOccurrenceAt ordinal range :: rest) =
     range :: selected_ranges rest
+
+-- Provide a bounded-memory audit with the actual number of framing events,
+-- not only the subset selected by a header policy.
+export
+scanned_occurrences : SelectionScanner → Number
+scanned_occurrences (Scanner _ _ next_ordinal _ _) = next_ordinal

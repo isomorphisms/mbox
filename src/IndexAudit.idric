@@ -1,0 +1,342 @@
+module Main
+
+import Data.Buffer
+import Data.Text
+import Data.List
+import System
+import System.File
+import Mail.Source
+import Mail.MboxSelection
+import Mail.SpecList
+import Mail.Index.Plaintext
+import Mail.Index.HashIO
+import Mail.Index.EntryDigestIO
+
+-- READ-ONLY: independently reframe the mailbox and compare every selected
+-- occurrence with the existing plaintext TSV snapshot. No writing or deletion.
+-- This also checks whole-source and sidecar SHA-256, but is still not a\n-- live-mail transaction and cannot authorize source mutation.
+
+chunk_size : Int
+chunk_size = 65536
+
+header_limit : Number
+header_limit = 4194304
+
+scan_octets :
+    Buffer →
+    Number →
+    Int →
+    SelectionScanner →
+    IO (Either Text SelectionScanner)
+scan_octets buffer 0 offset scanner = pure (Right scanner)
+scan_octets buffer (S remaining) offset scanner = do
+    code ← getBits8 buffer offset
+    case feed_selection_code spec_list_policy scanner code of
+        Left _ => pure (Left "mailbox header exceeds 4 MiB")
+        Right next =>
+            scan_octets buffer remaining (offset + 1) next
+
+covering
+scan_stream :
+    File →
+    Buffer →
+    SelectionScanner →
+    IO (Either Text SelectionScanner)
+scan_stream source buffer scanner = do
+    chunk ← readBufferData source buffer 0 chunk_size
+    case chunk of
+        Left _ => pure (Left "cannot read source")
+        Right 0 => pure (Right scanner)
+        Right count =>
+            case !(scan_octets buffer (cast count) 0 scanner) of
+                Left problem => pure (Left problem)
+                Right next => scan_stream source buffer next
+
+strip_newline : Text → Text
+strip_newline line =
+    pack (reverse (dropWhile
+        (\ch => ch ≟ '\n' || ch ≟ '\r') (reverse (unpack line))))
+
+manifest_value : Text → List Text → Maybe Text
+manifest_value wanted [] = Nothing
+manifest_value wanted (line :: rest) =
+    case fields_of line of
+        [key, value] =>
+            if key ≟ wanted then Just value
+            else manifest_value wanted rest
+        _ => manifest_value wanted rest
+
+record Manifest where
+    constructor ExistingManifest
+    source_path : Text
+    bytes : Number
+    messages : Number
+    selected : Number
+    selected_bytes : Number
+    source_sha256 : Text
+
+read_manifest : Text → IO (Either Text Manifest)
+read_manifest name = do
+    file ← readFile name
+    case file of
+        Left _ => pure (Left "cannot open source.state")
+        Right contents =>
+            let values = lines contents
+            in case
+                ( manifest_value "schema" values
+                , manifest_value "source_path" values
+                , manifest_value "bytes" values
+                , manifest_value "messages" values
+                , manifest_value "spec_list_messages" values
+                , manifest_value "spec_list_bytes" values
+                , manifest_value "sha256" values
+                ) of
+                (Just "mboxo-plaintext-index-v1",
+                 Just path, Just size, Just count, Just hits,
+                 Just hit_bytes, Just sha) =>
+                    case (read_number size, read_number count,
+                          read_number hits, read_number hit_bytes) of
+                        (Just total_bytes, Just total, Just chosen, Just chosen_bytes) =>
+                            if valid_digest sha
+                               then pure (Right
+                                    (ExistingManifest path total_bytes total
+                                        chosen chosen_bytes sha))
+                               else pure (Left "invalid manifest SHA-256 text")
+                        _ => pure (Left "invalid numeric manifest fields")
+                _ => pure (Left "missing or unsupported state fields")
+
+-- Hash each index sidecar and compare it with the immutable snapshot's
+-- manifest. The source.state hash fields are data, not permission to mutate.
+covering
+verify_sidecars :
+    Text →
+    List Text →
+    List Text →
+    IO (Either Text ())
+verify_sidecars snapshot state [] = pure (Right ())
+verify_sidecars snapshot state (name :: remaining) =
+    case manifest_value ("sha256." ++ name) state of
+        Nothing => pure (Left ("missing manifest hash for " ++ name))
+        Just expected =>
+            if not (valid_digest expected)
+               then pure (Left ("malformed manifest hash for " ++ name))
+               else do
+                   result ← hash_file (snapshot ++ "/" ++ name)
+                   case result of
+                       Left problem => pure (Left problem)
+                       Right hashed =>
+                           if sha256_hex hashed ≟ expected
+                              then verify_sidecars snapshot state remaining
+                              else pure (Left ("sidecar hash mismatch: " ++ name))
+
+covering
+check_snapshot_hashes :
+    Text → Text → Manifest → IO (Either Text ())
+check_snapshot_hashes snapshot mailbox_path manifest = do
+    checked ← verify_entry_hashes
+        mailbox_path
+        (snapshot ++ "/messages.tsv")
+        (bytes manifest)
+        (source_sha256 manifest)
+    case checked of
+        Left problem => pure (Left problem)
+        Right receipt =>
+            if not (messages receipt ≟ messages manifest &&
+                    selected_messages receipt ≟ selected manifest &&
+                    selected_bytes receipt ≟ selected_bytes manifest)
+               then pure (Left "occurrence hash audit summary mismatch")
+               else do
+                   state ← readFile (snapshot ++ "/source.state")
+                   case state of
+                       Left _ => pure (Left "cannot re-open source.state")
+                       Right contents =>
+                           verify_sidecars snapshot (lines contents)
+                               [ "messages.tsv"
+                               , "lists.tsv"
+                               , "senders.tsv"
+                               , "dates.tsv"
+                               , "subjects.tsv"
+                               ]
+
+-- The Idriç scanner numbers the first occurrence 0; plaintext indices use 1.
+check_scanned :
+    IndexedOccurrence →
+    List SelectedOccurrence →
+    Either Text (List SelectedOccurrence)
+check_scanned row [] =
+    if is_selected row
+       then Left "indexed selection absent from Idriç scan"
+       else Right []
+check_scanned row remaining@(SelectedOccurrenceAt framed_ordinal
+    (Octets (AtOctet begins) (AtOctet ends)) :: rest) =
+    if not (is_selected row) then Right remaining
+    else if framed_ordinal + 1 ≟ ordinal row
+         && begins ≟ start_octet row
+         && ends ≟ end_octet row
+         then Right rest
+         else Left "Idriç framing / SPEC-LIST selection disagrees with index"
+
+covering
+audit_rows :
+    File →
+    File →
+    Number →
+    List SelectedOccurrence →
+    AuditProgress →
+    IO (Either Text AuditProgress)
+audit_rows entries lists source_bytes selected progress = do
+    next_line ← fGetLine entries
+    case next_line of
+        Left _ => pure (Left "cannot read messages.tsv")
+        Right "" => do
+            finished ← fEOF entries
+            if not finished then pure (Left "empty row in messages.tsv")
+            else if not (reaches_end source_bytes progress)
+                 then pure (Left "source coverage incomplete")
+            else case selected of
+                _ :: _ => pure (Left "Idriç scan has additional selections")
+                [] => do
+                    extra ← fGetLine lists
+                    case extra of
+                        Left _ => pure (Left "cannot finish reading lists.tsv")
+                        Right "" => do
+                            at_end ← fEOF lists
+                            if at_end then pure (Right progress)
+                            else pure (Left "unexpected empty lists.tsv row")
+                        Right _ => pure (Left "lists.tsv has extra selected occurrences")
+        Right raw =>
+            case decode_row source_bytes progress (strip_newline raw) of
+                Left problem => pure (Left problem)
+                Right (row, next_progress) =>
+                    case check_scanned row selected of
+                        Left problem => pure (Left problem)
+                        Right remaining =>
+                            if is_selected row
+                               then do
+                                   expected ← fGetLine lists
+                                   case expected of
+                                       Left _ => pure (Left "cannot read lists.tsv")
+                                       Right line =>
+                                           if check_list_record row (strip_newline line)
+                                              then audit_rows
+                                                  entries lists source_bytes
+                                                  remaining next_progress
+                                              else pure (Left "lists.tsv row mismatch")
+                               else audit_rows
+                                   entries lists source_bytes remaining next_progress
+
+check_index :
+    Text →
+    Number →
+    List SelectedOccurrence →
+    IO (Either Text AuditProgress)
+check_index snapshot size selected = do
+    entries_opened ← openFile (snapshot ++ "/messages.tsv") Read
+    case entries_opened of
+        Left _ => pure (Left "cannot open messages.tsv")
+        Right entries => do
+            lists_opened ← openFile (snapshot ++ "/lists.tsv") Read
+            case lists_opened of
+                Left _ => do
+                    closeFile entries
+                    pure (Left "cannot open lists.tsv")
+                Right lists => do
+                    checked ← audit_rows entries lists size selected initial_progress
+                    closeFile lists
+                    closeFile entries
+                    pure checked
+
+covering
+audit : Text → Text → IO ()
+audit snapshot mailbox_path = do
+    expected ← read_manifest (snapshot ++ "/source.state")
+    case expected of
+        Left problem => do
+            putStrLn ("REFUSED\t" ++ problem)
+            exitFailure
+        Right manifest => do
+            if not (mailbox_path ≟ source_path manifest)
+               then do
+                   putStrLn "REFUSED\tsource path differs from snapshot"
+                   exitFailure
+               else pure ()
+            opened ← openFile mailbox_path Read
+            case opened of
+                Left _ => do
+                    putStrLn "REFUSED\tcannot open source mailbox"
+                    exitFailure
+                Right source => do
+                    source_size ← fileSize source
+                    case source_size of
+                        Left _ => do
+                            closeFile source
+                            putStrLn "REFUSED\tcannot inspect mailbox size"
+                            exitFailure
+                        Right size => do
+                            if not ((cast size : Number) ≟ bytes manifest)
+                               then do
+                                   closeFile source
+                                   putStrLn "REFUSED\tmailbox size differs from snapshot"
+                                   exitFailure
+                               else pure ()
+                            allocated ← newBuffer chunk_size
+                            case allocated of
+                                Nothing => do
+                                    closeFile source
+                                    putStrLn "REFUSED\tunable to allocate 64 KiB"
+                                    exitFailure
+                                Just buffer => do
+                                    scanned ← scan_stream
+                                        source buffer (start_selection_scan header_limit)
+                                    closeFile source
+                                    case scanned of
+                                        Left problem => do
+                                            putStrLn ("REFUSED\t" ++ problem)
+                                            exitFailure
+                                        Right scanner => do
+                                            let selections =
+                                                finish_selection_scan spec_list_policy scanner
+                                            checked ← check_index
+                                                snapshot (bytes manifest) selections
+                                            case checked of
+                                                Left problem => do
+                                                    putStrLn ("REFUSED\t" ++ problem)
+                                                    exitFailure
+                                                Right progress =>
+                                                    if not
+                                                        (observed_messages progress ≟ messages manifest
+                                                         && scanned_occurrences scanner ≟ messages manifest
+                                                         && selected_count progress ≟ selected manifest
+                                                         && selected_octets progress ≟ selected_bytes manifest)
+                                                        then do
+                                                            putStrLn "REFUSED\tsummary differs from source.state"
+                                                            exitFailure
+                                                        else do
+                                                            putStrLn "INDEX_SELECTION_MATCH\tIdriç vs plaintext"
+                                                            putStrLn ("messages\t" ++ show (observed_messages progress))
+                                                            putStrLn ("spec_list_messages\t" ++ show (selected_count progress))
+                                                            putStrLn ("spec_list_bytes\t" ++ show (selected_octets progress))
+                                                            hashes ← check_snapshot_hashes
+                                                                snapshot mailbox_path manifest
+                                                            case hashes of
+                                                                Left problem => do
+                                                                    putStrLn ("REFUSED\t" ++ problem)
+                                                                    exitFailure
+                                                                Right () => do
+                                                                    putStrLn "WHOLE_SOURCE_SHA256\tMATCH"
+                                                                    putStrLn "SIDECAR_SHA256\tMATCH"
+                                                                    putStrLn "PER_OCCURRENCE_SHA256\tMATCH"
+                                                                    putStrLn "LIVE_MAIL_MOVE\tDISABLED"
+
+usage : IO ()
+usage = do
+    putStrLn "usage: idric-index-audit SNAPSHOT_DIRECTORY SOURCE_MBOX"
+    exitFailure
+
+covering
+main : IO ()
+main = do
+    args ← getArgs
+    case args of
+        [program, snapshot, source] => audit snapshot source
+        _ => usage
