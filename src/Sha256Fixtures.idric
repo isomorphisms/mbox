@@ -1,0 +1,44 @@
+module Main
+
+import Data.Text
+import System
+import Mail.Index.Sha256
+
+known_vectors : Bool
+known_vectors =
+    and
+        [ hash_octets [] ≟
+            Right "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        , hash_octets [97,98,99] ≟
+            Right "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        , hash_octets (replicate 55 97) ≟
+            Right "9f4390f8d30c2dd92ec9f095b65e2b9ae9b0a925a5258e241c9f1e910f734318"
+        , hash_octets (replicate 56 97) ≟
+            Right "b35439a4ac6f0948b6d6f9e3c6af0f5f590ce20f1bde7090ef7970686ec6738a"
+        , hash_octets (replicate 63 97) ≟
+            Right "7d3e74a05d7db15bce4ad9ec0658ea98e3f06eeecf16b4c6fff2da457ddc2f34"
+        , hash_octets (replicate 64 97) ≟
+            Right "ffe054fe7ae0cb6dc65c3af9b61d5209f439851db43d0ba5997337df154668eb"
+        , hash_octets (replicate 65 97) ≟
+            Right "635361c48bb9eab14198e76ea8ab7f1a41685d6ad62aa9146d301d4f17eb0ae0"
+        , hash_octets (replicate 1000 97) ≟
+            Right "41edece42d63e8d9bf515a9ba6932e1c20cbc9f5a5d134645adb5db1b9737ea3"
+        ]
+
+chunk_boundary_equivalence : Bool
+chunk_boundary_equivalence =
+    case update_octets initial_hash (replicate 32 97) of
+        Left _ => False
+        Right first =>
+            case update_octets first (replicate 68 97) of
+                Left _ => False
+                Right second =>
+                    finish_hash second ≟ hash_octets (replicate 100 97)
+
+main : IO ()
+main =
+    if known_vectors && chunk_boundary_equivalence
+       then putStrLn "PASS Idriç streaming SHA-256 vectors and partitions"
+       else do
+           putStrLn "FAIL Idriç streaming SHA-256 vectors and partitions"
+           exitFailure
