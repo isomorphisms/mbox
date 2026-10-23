@@ -12,16 +12,20 @@ six-header SPEC-LIST policy, and pure recovery policy. This change adds:
 - `IndexRowFixtures.idric`: executable pure contract tests, including
   4,433,384,703-byte offsets and deliberate bad records.
 - `IndexAudit.idric`: independently scans source mailbox bytes using the
-  Idriç framer and selector, then compares each selected occurrence with the
-  persisted `messages.tsv` and `lists.tsv` in the existing snapshot.
-  Compares count and coverage with `source.state`.
+  Idriç framer and selector, compares selected occurrences with the
+  existing `messages.tsv` and `lists.tsv`, and recomputes SHA-256 for the
+  source, every entry, and all five sidecar files.
+- `Mail.Index.Sha256`: a pure streaming Idriç SHA-256 reference with
+  multiple known digest tests. `Mail.Index.EntryDigestIO` verifies each
+  occurrence separately without deduplicating identical messages.
 - CI: independent Python builder/validator is **test oracle only**, never
   part of the delivered Idriç runtime.
 
 **Current output is `INDEX_SELECTION_MATCH`, not `VERIFIED`.**
-Source and per-entry SHA-256 hashes are *parsed* but not yet recomputed
-in Idriç; file size is checked, but source identity/inode/nanosecond
-timestamps and concurrent delivery are not. Passing the audit alone
+Pure Idriç streaming SHA-256 source, sidecar, and per-occurrence checks are
+implemented, but **not yet proven to compile or run on SDF**. The audit checks
+file size, but source identity/inode/nanosecond timestamps, concurrent delivery,
+and destination/archive I/O are not qualified. Passing the audit alone
 cannot authorize copying, overwriting or removing mail.
 
 ## SDF acceptance record from 2026-10-23
@@ -71,10 +75,9 @@ Benchmark on small disposable fixtures first, not the live mailbox.
 
 ## Remaining before retiring Python or moving mail
 
-1. Implement **Idriç** streaming SHA-256 (or a narrowly typed, independently
-   qualified native hash primitive) for the source and every occurrence.
-   Verify the five TSV sidecar file hashes and a whole snapshot, not
-   merely their textual formats.
+1. Compile and validate the Idriç streaming SHA-256 against independent
+   known vectors and larger byte fixtures, and qualify its throughput on NetBSD.
+   Typechecking or a passing fixture on Linux does not qualify a 4.4 GB SDF scan.
 2. Port `build` fully into Idriç: bounded-memory framing, exact
    occurrence hashes, header values, dates, sorted index files,
    source-identity checks, private staging and atomic publication.
