@@ -2,7 +2,6 @@ import hashlib
 import importlib.util
 from pathlib import Path
 import random
-import shutil
 import tempfile
 import unittest
 
@@ -10,6 +9,13 @@ MODULE = Path(__file__).resolve().parents[1] / 'bin' / 'plaintext-index.py'
 spec = importlib.util.spec_from_file_location('plaintext_index', MODULE)
 idx = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(idx)
+ref_spec = importlib.util.spec_from_file_location(
+    'spec_list_inventory', MODULE.parent / 'spec-list-inventory.py')
+if (MODULE.parent / 'spec-list-inventory.py').exists():
+    reference = importlib.util.module_from_spec(ref_spec)
+    ref_spec.loader.exec_module(reference)
+else:
+    reference = None
 
 
 def envelope_offsets(payload):
@@ -60,6 +66,30 @@ class IndexTests(unittest.TestCase):
                 self.assertEqual(digest, hashlib.sha256(payload).hexdigest())
                 for (_, start, end, entry_digest, *_rest) in found:
                     self.assertEqual(entry_digest, hashlib.sha256(payload[start:end]).hexdigest())
+
+    @unittest.skipIf(reference is None, 'requires existing reference inventory')
+    def test_reference_inventory_agreement(self):
+        rng = random.Random(317)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / 'mbox'
+            for _ in range(50):
+                entries = []
+                for j in range(rng.randint(1, 12)):
+                    headers = rng.choice((
+                        b'From: SPEC-LIST\n', b'To: sample@example.com\n',
+                        b'Subject: spec-\n list\n', b'Cc: SPEC-LIST\r\n',
+                        b'List-Id: SPEC-LIST\n', b'Subject: something\n'))
+                    body = rng.choice((b'abcdef\n', b'>From escaped\n',
+                                       b'From split\n\n', b'\x00\xff\n'))
+                    entries.append(b'From test\n' + headers + b'\n' + body)
+                payload = b''.join(entries)
+                path.write_bytes(payload)
+                expected = reference.scan(path, 0, 0)
+                count, digest, found = run_scan(payload, rng.choice((1, 5, 13, 4096)))
+                self.assertEqual(count, expected['total'])
+                self.assertEqual(sum(bool(e[4]) for e in found), expected['selected'])
+                self.assertEqual(sum(e[2] - e[1] for e in found if e[4]),
+                                 expected['selected_octets'])
 
     def test_build_verify_private_and_duplicates(self):
         with tempfile.TemporaryDirectory() as tmp:
