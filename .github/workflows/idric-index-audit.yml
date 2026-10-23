@@ -1,0 +1,93 @@
+name: Idriç plaintext index audit (read-only)
+
+on:
+  push:
+    branches:
+      - "idric-sdf-index-audit-20261023"
+    paths:
+      - "src/**/*.idric"
+      - "mbox.ipkg"
+      - ".github/workflows/idric-index-audit.yml"
+  pull_request:
+    branches:
+      - "Idriç"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  typecheck-and-fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Idriç mbox implementation
+        uses: actions/checkout@v4
+        with:
+          path: mbox
+      - name: Check out pinned maintained Idriç compiler
+        uses: actions/checkout@v4
+        with:
+          repository: isomorphisms/Idric
+          ref: "51e3892d4de59943e42e65c60a9814aba792c5d4"
+          path: idric
+      - name: Check out Python reference for differential fixture only
+        uses: actions/checkout@v4
+        with:
+          repository: isomorphisms/mbox
+          ref: main
+          path: mbox-reference
+      - name: Restore Idriç compiler build
+        id: idric-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            idric/_/.tools
+            idric/_/bootstrap-build
+            idric/_/build
+            idric/_/libs/prelude/build
+            idric/_/libs/base/build
+            idric/_/libs/contrib/build
+            idric/_/libs/linear/build
+            idric/_/libs/network/build
+            idric/_/libs/test/build
+          key: idric-linux-51e3892d4de59943e42e65c60a9814aba792c5d4-v1
+      - name: Bootstrap when not cached
+        if: steps.idric-cache.outputs.cache-hit != 'true'
+        working-directory: idric
+        run: ./edric bootstrap
+      - name: Compile and run Idriç index row checks
+        run: |
+          support="$GITHUB_WORKSPACE/idric/_"
+          idric_library_path="$support/libs/prelude/build/ttc:$support/libs/base/build/ttc:$support/libs/linear/build/ttc:$support/libs/network/build/ttc:$support/libs/contrib/build/ttc:$support/libs/test/build/ttc:"
+          (
+            cd mbox/src
+            export PATH="$support/.tools/bin:$PATH"
+            export CHEZ="$support/.tools/bin/scheme"
+            export IDRIS2_PREFIX="$support/bootstrap-build"
+            export IDRIS2_PATH="$idric_library_path"
+            "$support/build/exec/idris2" IndexRowFixtures.idric -o index-row-fixtures
+            ./build/exec/index-row-fixtures | tee ../index-row.out
+            grep -Fx 'PASS Idriç plaintext index row invariants' ../index-row.out
+            "$support/build/exec/idris2" IndexAudit.idric -o idric-index-audit
+          )
+      - name: Build plaintext reference index on disposable fixture
+        run: |
+          python3 mbox-reference/bin/plaintext-index.py build \
+            --source "$GITHUB_WORKSPACE/mbox/fixtures/spec-list-selection.mbox" \
+            --out "$GITHUB_WORKSPACE/fixture-index" --progress-mib 0
+          python3 mbox-reference/bin/plaintext-index.py verify \
+            --source "$GITHUB_WORKSPACE/mbox/fixtures/spec-list-selection.mbox" \
+            --out "$GITHUB_WORKSPACE/fixture-index" --progress-mib 0
+      - name: Independently compare Idriç framing and selection against TSV
+        run: |
+          support="$GITHUB_WORKSPACE/idric/_"
+          export PATH="$support/.tools/bin:$PATH"
+          export CHEZ="$support/.tools/bin/scheme"
+          export IDRIS2_PREFIX="$support/bootstrap-build"
+          snap="$(cat "$GITHUB_WORKSPACE/fixture-index/CURRENT")"
+          "$GITHUB_WORKSPACE/mbox/src/build/exec/idric-index-audit" \
+            "$GITHUB_WORKSPACE/fixture-index/snapshots/$snap" \
+            "$GITHUB_WORKSPACE/mbox/fixtures/spec-list-selection.mbox" | tee idric-index-audit.out
+          grep -Fx "$(printf 'INDEX_SELECTION_MATCH\tIdriç vs plaintext')" idric-index-audit.out
+          grep -Fx "$(printf 'CRYPTOGRAPHIC_VERIFICATION\tNOT_IMPLEMENTED')" idric-index-audit.out
+          grep -Fx "$(printf 'LIVE_MAIL_MOVE\tDISABLED')" idric-index-audit.out
