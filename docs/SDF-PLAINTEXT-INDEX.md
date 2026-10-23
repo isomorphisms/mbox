@@ -3,10 +3,24 @@
 This is a read-only index of the byte content of /var/mail/isomorphisms,
 not a mail mover and not a Mutt cache.
 
-On the SDF shell (where ~/opt/mbox already exists):
+On the SDF shell. If ~/opt/mbox is a Git checkout, update it in place;
+otherwise, clone only the program into a separate directory:
 
-    cd "$HOME/opt/mbox"
-    git pull --ff-only
+    set -e
+    umask 077
+    python -c 'import sys; assert sys.version_info >= (3, 7)'
+    if git -C "$HOME/opt/mbox" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      work="$HOME/opt/mbox"
+      git -C "$work" pull --ff-only
+    else
+      work="$HOME/opt/mbox-index-code"
+      if [ -d "$work/.git" ]; then
+        git -C "$work" pull --ff-only
+      else
+        git clone --depth 1 https://github.com/isomorphisms/mbox.git "$work"
+      fi
+    fi
+    cd "$work"
     python -m unittest discover -s tests -p 'test_plaintext_index.py'
     python bin/plaintext-index.py build --source /var/mail/isomorphisms --out "$HOME/opt/mbox/index"
     python bin/plaintext-index.py verify --source /var/mail/isomorphisms --out "$HOME/opt/mbox/index"
