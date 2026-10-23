@@ -9,10 +9,11 @@ import Mail.Source
 import Mail.MboxSelection
 import Mail.SpecList
 import Mail.Index.Plaintext
+import Mail.Index.HashIO
 
 -- READ-ONLY: independently reframe the mailbox and compare every selected
 -- occurrence with the existing plaintext TSV snapshot. No writing or deletion.
--- SHA-256 checking and live mailbox delivery locking are NOT implemented here.
+-- This also checks whole-source and sidecar SHA-256, but is still not a\n-- live-mail transaction and cannot authorize source mutation.
 
 chunk_size : Int
 chunk_size = 65536
@@ -71,6 +72,7 @@ record Manifest where
     messages : Number
     selected : Number
     selected_bytes : Number
+    source_sha256 : Text
 
 read_manifest : Text → IO (Either Text Manifest)
 read_manifest name = do
@@ -97,10 +99,58 @@ read_manifest name = do
                             if valid_digest sha
                                then pure (Right
                                     (ExistingManifest path total_bytes total
-                                        chosen chosen_bytes))
+                                        chosen chosen_bytes sha))
                                else pure (Left "invalid manifest SHA-256 text")
                         _ => pure (Left "invalid numeric manifest fields")
                 _ => pure (Left "missing or unsupported state fields")
+
+-- Hash each index sidecar and compare it with the immutable snapshot's
+-- manifest. The source.state hash fields are data, not permission to mutate.
+covering
+verify_sidecars :
+    Text →
+    List Text →
+    List Text →
+    IO (Either Text ())
+verify_sidecars snapshot state [] = pure (Right ())
+verify_sidecars snapshot state (name :: remaining) =
+    case manifest_value ("sha256." ++ name) state of
+        Nothing => pure (Left ("missing manifest hash for " ++ name))
+        Just expected =>
+            if not (valid_digest expected)
+               then pure (Left ("malformed manifest hash for " ++ name))
+               else do
+                   result ← hash_file (snapshot ++ "/" ++ name)
+                   case result of
+                       Left problem => pure (Left problem)
+                       Right hashed =>
+                           if sha256_hex hashed ≟ expected
+                              then verify_sidecars snapshot state remaining
+                              else pure (Left ("sidecar hash mismatch: " ++ name))
+
+covering
+check_snapshot_hashes :
+    Text → Text → Manifest → IO (Either Text ())
+check_snapshot_hashes snapshot mailbox_path manifest = do
+    source ← hash_file mailbox_path
+    case source of
+        Left problem => pure (Left problem)
+        Right hashed =>
+            if not (octets hashed ≟ bytes manifest &&
+                    sha256_hex hashed ≟ source_sha256 manifest)
+               then pure (Left "whole mailbox SHA-256 differs from source.state")
+               else do
+                   state ← readFile (snapshot ++ "/source.state")
+                   case state of
+                       Left _ => pure (Left "cannot re-open source.state")
+                       Right contents =>
+                           verify_sidecars snapshot (lines contents)
+                               [ "messages.tsv"
+                               , "lists.tsv"
+                               , "senders.tsv"
+                               , "dates.tsv"
+                               , "subjects.tsv"
+                               ]
 
 -- The Idriç scanner numbers the first occurrence 0; plaintext indices use 1.
 check_scanned :
@@ -260,8 +310,17 @@ audit snapshot mailbox_path = do
                                                             putStrLn ("messages\t" ++ show (observed_messages progress))
                                                             putStrLn ("spec_list_messages\t" ++ show (selected_count progress))
                                                             putStrLn ("spec_list_bytes\t" ++ show (selected_octets progress))
-                                                            putStrLn "CRYPTOGRAPHIC_VERIFICATION\tNOT_IMPLEMENTED"
-                                                            putStrLn "LIVE_MAIL_MOVE\tDISABLED"
+                                                            hashes ← check_snapshot_hashes
+                                                                snapshot mailbox_path manifest
+                                                            case hashes of
+                                                                Left problem => do
+                                                                    putStrLn ("REFUSED\t" ++ problem)
+                                                                    exitFailure
+                                                                Right () => do
+                                                                    putStrLn "WHOLE_SOURCE_SHA256\tMATCH"
+                                                                    putStrLn "SIDECAR_SHA256\tMATCH"
+                                                                    putStrLn "PER_OCCURRENCE_SHA256\tNOT_INDEPENDENTLY_CHECKED"
+                                                                    putStrLn "LIVE_MAIL_MOVE\tDISABLED"
 
 usage : IO ()
 usage = do
