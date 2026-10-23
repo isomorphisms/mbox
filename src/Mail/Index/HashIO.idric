@@ -1,0 +1,83 @@
+module Mail.Index.HashIO
+
+import Data.Buffer
+import System.File
+import Mail.Index.Sha256
+
+-- Stream bytes through the Idriç SHA-256 reference. This deliberately has no
+-- process execution, text decoding, mailbox rewriting, or filesystem mutation.
+
+buffer_size : Int
+buffer_size = 65536
+
+record StreamState where
+    constructor Streamed
+    bytes_read : Number
+    sha : HashState
+
+hash_buffer :
+    Buffer →
+    Number →
+    Int →
+    HashState →
+    IO (Either Text HashState)
+hash_buffer buffer 0 offset state = pure (Right state)
+hash_buffer buffer (S more) offset state = do
+    value ← getBits8 buffer offset
+    case update_octet state value of
+        Left problem => pure (Left problem)
+        Right next => hash_buffer buffer more (offset + 1) next
+
+covering
+digest_file_stream :
+    File →
+    Buffer →
+    StreamState →
+    IO (Either Text StreamState)
+digest_file_stream source buffer current = do
+    read_result ← readBufferData source buffer 0 buffer_size
+    case read_result of
+        Left _ => pure (Left "SHA-256 source read failed")
+        Right 0 => pure (Right current)
+        Right count =>
+            case !(hash_buffer buffer (cast count) 0 (sha current)) of
+                Left problem => pure (Left problem)
+                Right next =>
+                    digest_file_stream source buffer
+                        (Streamed (bytes_read current + cast count) next)
+
+public export
+record FileDigest where
+    constructor HashedFile
+    octets : Number
+    sha256_hex : Text
+
+export
+covering
+hash_open_file : File → IO (Either Text FileDigest)
+hash_open_file source = do
+    allocated ← newBuffer buffer_size
+    case allocated of
+        Nothing => pure (Left "cannot allocate SHA-256 buffer")
+        Just buffer => do
+            scanned ← digest_file_stream source buffer
+                (Streamed 0 initial_hash)
+            case scanned of
+                Left problem => pure (Left problem)
+                Right state =>
+                    case finish_hash (sha state) of
+                        Left problem => pure (Left problem)
+                        Right digest =>
+                            pure (Right (HashedFile (bytes_read state) digest))
+
+export
+covering
+hash_file : Text → IO (Either Text FileDigest)
+hash_file path = do
+    opened ← openFile path Read
+    case opened of
+        Left _ => pure (Left "cannot open file for SHA-256")
+        Right source => do
+            hashed ← hash_open_file source
+            closeFile source
+            pure hashed
