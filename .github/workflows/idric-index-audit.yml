@@ -90,6 +90,10 @@ jobs:
             "$support/build/exec/idris2" Sha256Fixtures.idric -o idric-sha256-fixtures
             ./build/exec/idric-sha256-fixtures | tee ../idric-sha256-fixtures.out
             grep -Fx 'PASS Idriç streaming SHA-256 vectors and partitions' ../idric-sha256-fixtures.out
+            "$support/build/exec/idris2" HashFileFixture.idric -o idric-hash-file-fixture
+            printf 'abc' > ../hash-abc.bin
+            ./build/exec/idric-hash-file-fixture ../hash-abc.bin | tee ../idric-hash-file.out
+            grep -Fx 'PASS Idriç SHA-256 streaming file I/O' ../idric-hash-file.out
             "$support/build/exec/idris2" IndexAudit.idric -o idric-index-audit
           )
       - name: Build plaintext reference index on disposable fixture
